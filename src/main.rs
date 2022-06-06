@@ -1,9 +1,10 @@
 extern crate gl;
 extern crate glfw;
 
-use gl::types::*;
 use glfw::{Action, Context, Key};
 use std::mem::size_of;
+
+mod shader;
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
@@ -32,37 +33,17 @@ fn main() {
     }
 
     let verts = vec![
-        0.5, 0.5, 0.0, // top right
-        0.5, -0.5, 0.0, // bottom right
-        -0.5, -0.5, 0.0, // bottom left
-        -0.5, 0.5, 0.0f32, // top left
+        // top right
+        0.5, 0.5, 0.0, 1.0, 0.0, 0.0, // bottom right
+        0.5, -0.5, 0.0, 0.0, 1.0, 0.0, // bottom left
+        -0.5, -0.5, 0.0, 0.0, 0.0, 1.0, // top left
+        -0.5, 0.5, 0.0, 0.5, 0.5, 0.5f32,
     ];
 
     let inds = vec![0, 1, 3, 1, 2, 3];
 
-    let vert_shader_src = r#"
-        #version 330 core
-        layout (location = 0) in vec3 aPos;
-    
-        void main() {
-            gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
-        }
-    "#;
-    let mut vert_shader = create_shader(vert_shader_src, gl::VERTEX_SHADER);
-
-    let frag_shader_src = r#"
-        #version 330 core
-    
-        out vec4 FragColor;
-    
-        void main(){
-            FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
-        }
-    "#;
-
-    let mut frag_shader = create_shader(frag_shader_src, gl::FRAGMENT_SHADER);
-
-    let mut shader_program = create_program(vert_shader, frag_shader);
+    let shader_program =
+        shader::ShaderProgram::new("assets/shaders/simple.vert", "assets/shaders/simple.frag");
 
     let mut vao = 0u32;
     let mut vbo = 0u32;
@@ -80,17 +61,29 @@ fn main() {
             gl::STATIC_DRAW,
         );
 
-        gl::UseProgram(shader_program);
+        shader_program.use_program();
+
         gl::VertexAttribPointer(
             0,
             3,
             gl::FLOAT,
             gl::FALSE,
-            3 * size_of::<f32>() as i32,
+            6 * size_of::<f32>() as i32,
             std::ptr::null(),
         );
 
         gl::EnableVertexAttribArray(0);
+
+        gl::VertexAttribPointer(
+            1,
+            3,
+            gl::FLOAT,
+            gl::FALSE,
+            6 * size_of::<f32>() as i32,
+            (3 * size_of::<f32>()) as *const _,
+        );
+
+        gl::EnableVertexAttribArray(1);
 
         gl::GenBuffers(1, &mut ebo);
         gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
@@ -113,8 +106,19 @@ fn main() {
 
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT);
-            gl::UseProgram(shader_program);
+            shader_program.use_program();
             gl::BindVertexArray(vao);
+
+            let time = glfw.get_time();
+            let green = ((time.sin() / 2.0) + 0.5) as f32;
+            gl::Uniform4f(
+                gl::GetUniformLocation(shader_program.id, "u_color".as_bytes().as_ptr().cast()),
+                0.0f32,
+                green,
+                0.0f32,
+                1.0f32,
+            );
+
             gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, std::ptr::null());
         }
 
@@ -143,85 +147,5 @@ fn handle_window_event(
             }
         }
         _ => {}
-    }
-}
-
-fn create_shader(shader_src: &str, shader_type: GLenum) -> u32 {
-    unsafe {
-        let shader_id = gl::CreateShader(shader_type);
-        gl::ShaderSource(
-            shader_id,
-            1,
-            &(shader_src.as_bytes().as_ptr().cast()),
-            &(shader_src.len().try_into().unwrap()),
-        );
-        gl::CompileShader(shader_id);
-
-        let mut success = gl::FALSE as GLint;
-        gl::GetShaderiv(shader_id, gl::COMPILE_STATUS, &mut success);
-
-        if success != (gl::TRUE as GLint) {
-            let mut len = 0;
-
-            gl::GetShaderiv(shader_id, gl::INFO_LOG_LENGTH, &mut len);
-            let mut buf = Vec::with_capacity(len as usize);
-            buf.set_len(len as usize - 1);
-
-            gl::GetShaderInfoLog(
-                shader_id,
-                len,
-                std::ptr::null_mut(),
-                buf.as_mut_ptr() as *mut GLchar,
-            );
-
-            panic!(
-                "{}",
-                std::str::from_utf8(&buf)
-                    .ok()
-                    .expect("ShaderInforLog not vlid utf8")
-            )
-        } else {
-            shader_id
-        }
-    }
-}
-
-fn create_program(vert_shader_id: u32, frag_shader_id: u32) -> u32 {
-    unsafe {
-        let mut shader_program = 0u32;
-        shader_program = gl::CreateProgram();
-        gl::AttachShader(shader_program, vert_shader_id);
-        gl::AttachShader(shader_program, frag_shader_id);
-        gl::LinkProgram(shader_program);
-
-        let mut success = gl::FALSE as GLint;
-
-        gl::GetProgramiv(shader_program, gl::LINK_STATUS, &mut success);
-
-        if success != (gl::TRUE as GLint) {
-            let mut len = 0;
-
-            gl::GetProgramiv(shader_program, gl::INFO_LOG_LENGTH, &mut len);
-            let mut buf = Vec::with_capacity(len as usize);
-            buf.set_len(len as usize - 1);
-
-            gl::GetProgramInfoLog(
-                shader_program,
-                len,
-                std::ptr::null_mut(),
-                buf.as_mut_ptr() as *mut GLchar,
-            );
-
-            panic!(
-                "{}",
-                std::str::from_utf8(&buf)
-                    .ok()
-                    .expect("ShaderInforLog not vlid utf8")
-            )
-        } else {
-            gl::DeleteShader(vert_shader_id);
-            gl::DeleteShader(frag_shader_id);
-            shader_program
-        }
     }
 }
