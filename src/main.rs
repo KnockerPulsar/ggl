@@ -193,7 +193,14 @@ fn main() {
             shader_program.set_int("texture1", 0);
             shader_program.set_int("texture2", 1);
 
-            let view = glm::translate(&glm::Mat4::identity(), &glm::Vec3::new(0.0, 0.0, -3.0f32));
+            let radius = 10.0f64;
+            let cam_x = (glfw.get_time().sin() * radius) as f32;
+            let cam_z = (glfw.get_time().cos() * radius) as f32;
+
+            let camera_pos = glm::vec3(cam_x, 0.0f32, cam_z);
+            let camera_target = glm::vec3(0.0, 0.0, 0.0f32);
+            let up = glm::vec3(0.0, 1.0, 0.0f32);
+            let view = glm::look_at(&camera_pos, &camera_target, &up);
 
             let projection =
                 glm::perspective_fov(45.0f32.to_radians(), 300f32, 300f32, 0.1f32, 100.0f32);
