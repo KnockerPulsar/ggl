@@ -1,7 +1,6 @@
 extern crate gl;
 
 use gl::types::*;
-use std::env;
 use std::fs;
 
 pub struct ShaderProgram {
@@ -10,14 +9,6 @@ pub struct ShaderProgram {
 
 impl ShaderProgram {
     pub fn new(vert_shader_path: &str, frag_shader_path: &str) -> ShaderProgram {
-        println!(
-            "{}",
-            env::current_dir()
-                .unwrap()
-                .into_os_string()
-                .into_string()
-                .unwrap()
-        );
         let vert_shader_src = fs::read_to_string(vert_shader_path).expect(&format!(
             "Failed to read vertex shader at {}",
             vert_shader_path
@@ -43,12 +34,39 @@ impl ShaderProgram {
         }
     }
 
-    pub fn set_bool(name: &str, value: bool) {}
+    fn get_uniform_location(&self, name: &str) -> i32 {
+        unsafe {
+            let mut location = gl::GetUniformLocation(self.id, name.as_bytes().as_ptr().cast());
 
-    pub fn set_int(name: &str, value: i32) {}
+            if location == -1 {
+                panic!(
+                    "The request uniform {} is not in the shader with id {}",
+                    name, self.id
+                );
+            } else {
+                location
+            }
+        }
+    }
 
-    pub fn set_float(name: &str, value: f32) {}
+    pub fn set_int(&self, name: &str, value: i32) {
+        unsafe {
+            gl::Uniform1i(self.get_uniform_location(name), value as i32);
+        }
+    }
+
+    // GLSL doesn't have bools?
+    pub fn set_bool(&self, name: &str, value: bool) {
+        self.set_int(name, value as i32);
+    }
+
+    pub fn set_float(&self, name: &str, value: f32) {
+        unsafe {
+            gl::Uniform1f(self.get_uniform_location(name), value);
+        }
+    }
 }
+
 fn create_shader(shader_src: &str, shader_type: GLenum) -> u32 {
     unsafe {
         let shader_id = gl::CreateShader(shader_type);

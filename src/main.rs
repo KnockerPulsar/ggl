@@ -2,6 +2,7 @@ extern crate gl;
 extern crate glfw;
 
 use glfw::{Action, Context, Key};
+use std::env;
 use std::mem::size_of;
 
 mod shader;
@@ -41,6 +42,15 @@ fn main() {
     ];
 
     let inds = vec![0, 1, 3, 1, 2, 3];
+
+    println!(
+        "Current working directory: {}",
+        env::current_dir()
+            .unwrap()
+            .into_os_string()
+            .into_string()
+            .unwrap()
+    );
 
     let shader_program =
         shader::ShaderProgram::new("assets/shaders/simple.vert", "assets/shaders/simple.frag");
