@@ -36,11 +36,12 @@ impl ShaderProgram {
 
     fn get_uniform_location(&self, name: &str) -> i32 {
         unsafe {
-            let mut location = gl::GetUniformLocation(self.id, name.as_bytes().as_ptr().cast());
+            let name_cstr = std::ffi::CString::new(name).expect("CString::new failed");
+            let location = gl::GetUniformLocation(self.id, name_cstr.as_ptr().cast());
 
             if location == -1 {
                 panic!(
-                    "The request uniform {} is not in the shader with id {}",
+                    "The requested uniform {} is not in the shader with id {}",
                     name, self.id
                 );
             } else {

@@ -1,5 +1,6 @@
 extern crate gl;
 extern crate glfw;
+extern crate image;
 
 use glfw::{Action, Context, Key};
 use std::env;
@@ -34,11 +35,18 @@ fn main() {
     }
 
     let verts = vec![
-        // top right
-        0.5, 0.5, 0.0, 1.0, 0.0, 0.0, // bottom right
-        0.5, -0.5, 0.0, 0.0, 1.0, 0.0, // bottom left
-        -0.5, -0.5, 0.0, 0.0, 0.0, 1.0, // top left
-        -0.5, 0.5, 0.0, 0.5, 0.5, 0.5f32,
+        0.5, 0.5, 0.0, // top right
+        1.0, 0.0, 0.0, // Vertex colors
+        1.0, 1.0, // Texture coords
+        0.5, -0.5, 0.0, // bottom right
+        0.0, 1.0, 0.0, // Vertex colors
+        1.0, 0.0, // Texture coords
+        -0.5, -0.5, 0.0, // bottom left
+        0.0, 0.0, 1.0, // Vertex colors
+        0.0, 0.0, // Texture coords
+        -0.5, 0.5, 0.0, // top left
+        0.5, 0.5, 0.5, // Vertex Colors
+        0.0, 1.0f32, // Texture coords
     ];
 
     let inds = vec![0, 1, 3, 1, 2, 3];
@@ -74,12 +82,12 @@ fn main() {
         shader_program.use_program();
 
         gl::VertexAttribPointer(
-            0,
-            3,
-            gl::FLOAT,
-            gl::FALSE,
-            6 * size_of::<f32>() as i32,
-            std::ptr::null(),
+            0,                           // Atribute location
+            3,                           // Number of elements to send
+            gl::FLOAT,                   // Element type
+            gl::FALSE,                   // Normalized? (for converting ints to floats)
+            8 * size_of::<f32>() as i32, // Stride between each attribute group
+            std::ptr::null(),            // Offset to read the first group from
         );
 
         gl::EnableVertexAttribArray(0);
@@ -89,11 +97,22 @@ fn main() {
             3,
             gl::FLOAT,
             gl::FALSE,
-            6 * size_of::<f32>() as i32,
+            8 * size_of::<f32>() as i32,
             (3 * size_of::<f32>()) as *const _,
         );
 
         gl::EnableVertexAttribArray(1);
+
+        gl::VertexAttribPointer(
+            2,
+            2,
+            gl::FLOAT,
+            gl::FALSE,
+            8 * size_of::<f32>() as i32,
+            (6 * size_of::<f32>()) as *const _,
+        );
+
+        gl::EnableVertexAttribArray(2);
 
         gl::GenBuffers(1, &mut ebo);
         gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
@@ -106,6 +125,58 @@ fn main() {
 
         gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
     }
+
+    let container = image::io::Reader::open("assets/textures/container.jpg")
+        .unwrap()
+        .decode()
+        .unwrap();
+
+    let awesomeface = image::io::Reader::open("assets/textures/awesomeface.png")
+        .unwrap()
+        .decode()
+        .unwrap()
+        .flipv();
+
+    let container_w = container.width() as i32;
+    let container_h = container.height() as i32;
+
+    let awesome_w = awesomeface.width() as i32;
+    let awesome_h = awesomeface.height() as i32;
+
+    let mut container_id = 0;
+    let mut awesome_id = 0;
+    unsafe {
+        gl::GenTextures(1, &mut container_id);
+        gl::BindTexture(gl::TEXTURE_2D, container_id);
+        gl::TexImage2D(
+            gl::TEXTURE_2D,
+            0,
+            gl::RGB as i32,
+            container_w,
+            container_h,
+            0,
+            gl::RGB,
+            gl::UNSIGNED_BYTE,
+            container.as_bytes().as_ptr().cast(),
+        );
+        gl::GenerateMipmap(gl::TEXTURE_2D);
+
+        gl::GenTextures(1, &mut awesome_id);
+        gl::BindTexture(gl::TEXTURE_2D, awesome_id);
+        gl::TexImage2D(
+            gl::TEXTURE_2D,
+            0,
+            gl::RGB as i32,
+            awesome_w,
+            awesome_h,
+            0,
+            gl::RGBA,
+            gl::UNSIGNED_BYTE,
+            awesomeface.as_bytes().as_ptr().cast(),
+        );
+        gl::GenerateMipmap(gl::TEXTURE_2D);
+    }
+
     let mut polygon_mode = false;
     while !window.should_close() {
         glfw.poll_events();
@@ -116,18 +187,19 @@ fn main() {
 
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT);
+
+            gl::ActiveTexture(gl::TEXTURE0);
+            gl::BindTexture(gl::TEXTURE_2D, container_id);
+
+            gl::ActiveTexture(gl::TEXTURE1);
+            gl::BindTexture(gl::TEXTURE_2D, awesome_id);
+
             shader_program.use_program();
             gl::BindVertexArray(vao);
 
-            let time = glfw.get_time();
-            let green = ((time.sin() / 2.0) + 0.5) as f32;
-            gl::Uniform4f(
-                gl::GetUniformLocation(shader_program.id, "u_color".as_bytes().as_ptr().cast()),
-                0.0f32,
-                green,
-                0.0f32,
-                1.0f32,
-            );
+            // Set sampler `tex1` to read from texture unit 0
+            shader_program.set_int("texture1", 0);
+            shader_program.set_int("texture2", 1);
 
             gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, std::ptr::null());
         }
