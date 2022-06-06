@@ -31,7 +31,15 @@ fn main() {
         gl::ClearColor(0.2f32, 0.3f32, 0.3f32, 1.0f32);
     }
 
-    let verts = vec![-0.5, -0.5, 0.0, 0.5, -0.5, 0.0, 0.0, 0.5, 0.0f32];
+    let verts = vec![
+        0.5, 0.5, 0.0, // top right
+        0.5, -0.5, 0.0, // bottom right
+        -0.5, -0.5, 0.0, // bottom left
+        -0.5, 0.5, 0.0f32, // top left
+    ];
+
+    let inds = vec![0, 1, 3, 1, 2, 3];
+
     let vert_shader_src = r#"
         #version 330 core
         layout (location = 0) in vec3 aPos;
@@ -58,6 +66,7 @@ fn main() {
 
     let mut vao = 0u32;
     let mut vbo = 0u32;
+    let mut ebo = 0u32;
     unsafe {
         gl::GenVertexArrays(1, &mut vao);
         gl::BindVertexArray(vao);
@@ -82,30 +91,56 @@ fn main() {
         );
 
         gl::EnableVertexAttribArray(0);
-    }
 
+        gl::GenBuffers(1, &mut ebo);
+        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
+        gl::BufferData(
+            gl::ELEMENT_ARRAY_BUFFER,
+            (size_of::<f32>() * inds.len()) as isize,
+            inds.as_ptr() as *const _,
+            gl::STATIC_DRAW,
+        );
+
+        gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
+    }
+    let mut polygon_mode = false;
     while !window.should_close() {
         glfw.poll_events();
 
         for (_, event) in glfw::flush_messages(&events) {
-            handle_window_event(&mut window, event);
+            handle_window_event(&mut window, event, &mut polygon_mode);
         }
 
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT);
             gl::UseProgram(shader_program);
             gl::BindVertexArray(vao);
-            gl::DrawArrays(gl::TRIANGLES, 0, 3);
+            gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, std::ptr::null());
         }
 
         window.swap_buffers();
     }
 }
 
-fn handle_window_event(window: &mut glfw::Window, event: glfw::WindowEvent) {
+fn handle_window_event(
+    window: &mut glfw::Window,
+    event: glfw::WindowEvent,
+    polygon_mode: &mut bool,
+) {
     match event {
         glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) => {
             window.set_should_close(true);
+        }
+        glfw::WindowEvent::Key(Key::F, _, Action::Press, _) => {
+            *polygon_mode = !(*polygon_mode);
+
+            unsafe {
+                if *polygon_mode {
+                    gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
+                } else {
+                    gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
+                }
+            }
         }
         _ => {}
     }
