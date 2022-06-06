@@ -1,6 +1,7 @@
 extern crate gl;
 extern crate glfw;
 extern crate image;
+extern crate nalgebra_glm as glm;
 
 use glfw::{Action, Context, Key};
 use std::env;
@@ -35,21 +36,18 @@ fn main() {
     }
 
     let verts = vec![
-        0.5, 0.5, 0.0, // top right
-        1.0, 0.0, 0.0, // Vertex colors
-        1.0, 1.0, // Texture coords
-        0.5, -0.5, 0.0, // bottom right
-        0.0, 1.0, 0.0, // Vertex colors
-        1.0, 0.0, // Texture coords
-        -0.5, -0.5, 0.0, // bottom left
-        0.0, 0.0, 1.0, // Vertex colors
-        0.0, 0.0, // Texture coords
-        -0.5, 0.5, 0.0, // top left
-        0.5, 0.5, 0.5, // Vertex Colors
-        0.0, 1.0f32, // Texture coords
+        -0.5, -0.5, -0.5, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5, 0.5,
+        -0.5, 1.0, 1.0, -0.5, 0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 0.0, -0.5, -0.5, 0.5,
+        0.0, 0.0, 0.5, -0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 1.0, -0.5,
+        0.5, 0.5, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, 0.5, 0.5, 1.0, 0.0, -0.5, 0.5, -0.5,
+        1.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0,
+        0.0, -0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5,
+        -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5,
+        1.0, 0.0, -0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 1.0, 1.0, 0.5, -0.5, 0.5, 1.0, 0.0,
+        0.5, -0.5, 0.5, 1.0, 0.0, -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, 0.5,
+        -0.5, 0.0, 1.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0,
+        -0.5, 0.5, 0.5, 0.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0f32,
     ];
-
-    let inds = vec![0, 1, 3, 1, 2, 3];
 
     println!(
         "Current working directory: {}",
@@ -86,7 +84,7 @@ fn main() {
             3,                           // Number of elements to send
             gl::FLOAT,                   // Element type
             gl::FALSE,                   // Normalized? (for converting ints to floats)
-            8 * size_of::<f32>() as i32, // Stride between each attribute group
+            5 * size_of::<f32>() as i32, // Stride between each attribute group
             std::ptr::null(),            // Offset to read the first group from
         );
 
@@ -94,36 +92,17 @@ fn main() {
 
         gl::VertexAttribPointer(
             1,
-            3,
+            2,
             gl::FLOAT,
             gl::FALSE,
-            8 * size_of::<f32>() as i32,
+            5 * size_of::<f32>() as i32,
             (3 * size_of::<f32>()) as *const _,
         );
 
         gl::EnableVertexAttribArray(1);
 
-        gl::VertexAttribPointer(
-            2,
-            2,
-            gl::FLOAT,
-            gl::FALSE,
-            8 * size_of::<f32>() as i32,
-            (6 * size_of::<f32>()) as *const _,
-        );
-
-        gl::EnableVertexAttribArray(2);
-
-        gl::GenBuffers(1, &mut ebo);
-        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
-        gl::BufferData(
-            gl::ELEMENT_ARRAY_BUFFER,
-            (size_of::<f32>() * inds.len()) as isize,
-            inds.as_ptr() as *const _,
-            gl::STATIC_DRAW,
-        );
-
         gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
+        gl::Enable(gl::DEPTH_TEST);
     }
 
     let container = image::io::Reader::open("assets/textures/container.jpg")
@@ -177,6 +156,19 @@ fn main() {
         gl::GenerateMipmap(gl::TEXTURE_2D);
     }
 
+    let cube_positions = vec![
+        glm::vec3(0.0, 0.0, 0.0),
+        glm::vec3(2.0, 5.0, -15.0),
+        glm::vec3(-1.5, -2.2, -2.5),
+        glm::vec3(-3.8, -2.0, -12.3),
+        glm::vec3(2.4, -0.4, -3.5),
+        glm::vec3(-1.7, 3.0, -7.5),
+        glm::vec3(1.3, -2.0, -2.5),
+        glm::vec3(1.5, 2.0, -2.5),
+        glm::vec3(1.5, 0.2, -1.5),
+        glm::vec3(-1.3, 1.0, -1.5),
+    ];
+
     let mut polygon_mode = false;
     while !window.should_close() {
         glfw.poll_events();
@@ -186,7 +178,7 @@ fn main() {
         }
 
         unsafe {
-            gl::Clear(gl::COLOR_BUFFER_BIT);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
             gl::ActiveTexture(gl::TEXTURE0);
             gl::BindTexture(gl::TEXTURE_2D, container_id);
@@ -201,7 +193,30 @@ fn main() {
             shader_program.set_int("texture1", 0);
             shader_program.set_int("texture2", 1);
 
-            gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, std::ptr::null());
+            let view = glm::translate(&glm::Mat4::identity(), &glm::Vec3::new(0.0, 0.0, -3.0f32));
+
+            let projection =
+                glm::perspective_fov(45.0f32.to_radians(), 300f32, 300f32, 0.1f32, 100.0f32);
+
+            shader_program.set_mat4("view", view);
+            shader_program.set_mat4("projection", projection);
+
+            for i in 0..10 {
+                let mut model = glm::translation(&cube_positions[i]);
+
+                let angle = 20.0f32 * i as f32;
+
+                model = glm::rotate(
+                    &model,
+                    angle.to_radians(),
+                    &glm::make_vec3::<f32>(&[1.0, 0.3, 0.5f32]),
+                );
+
+                shader_program.set_mat4("model", model);
+
+                gl::DrawArrays(gl::TRIANGLES, 0, 36);
+            }
+            // gl::DrawElements(gl::TRIANGLES, 36, gl::UNSIGNED_INT, std::ptr::null());
         }
 
         window.swap_buffers();

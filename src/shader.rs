@@ -1,6 +1,7 @@
 extern crate gl;
 
 use gl::types::*;
+use nalgebra_glm as glm;
 use std::fs;
 
 pub struct ShaderProgram {
@@ -64,6 +65,17 @@ impl ShaderProgram {
     pub fn set_float(&self, name: &str, value: f32) {
         unsafe {
             gl::Uniform1f(self.get_uniform_location(name), value);
+        }
+    }
+
+    pub fn set_mat4(&self, name: &str, value: glm::Mat4) {
+        unsafe {
+            gl::UniformMatrix4fv(
+                self.get_uniform_location(name),
+                1,
+                gl::FALSE,
+                glm::value_ptr(&value).as_ptr().cast(),
+            );
         }
     }
 }
