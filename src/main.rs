@@ -159,7 +159,7 @@ fn main() {
     let container_pos = glm::vec3(0.0, 0.0, 0.0);
     let container_model_mat = glm::translation(&container_pos);
 
-    let light_pos = glm::vec3(0.6, 1.2, 0.6);
+    let light_pos = glm::vec3(0.6, 0.9, 0.7);
     let mut light_model_mat = glm::translation(&light_pos);
     light_model_mat = glm::scale(&light_model_mat, &glm::vec3(0.05, 0.05, 0.05));
 
@@ -189,10 +189,17 @@ fn main() {
             );
 
             lit_shader.use_program();
-            lit_shader.set_vec3("u_object_color", glm::vec3(1.0, 0.5, 0.31));
-            lit_shader.set_vec3("u_light_color", glm::vec3(1.0, 1.0, 1.0));
-            lit_shader.set_vec3("u_light_pos", light_pos);
             lit_shader.set_vec3("u_view_pos", camera.get_pos());
+
+            lit_shader.set_vec3("u_material.ambient", glm::vec3(1.0, 0.5, 0.31));
+            lit_shader.set_vec3("u_material.diffuse", glm::vec3(1.0, 0.5, 0.31));
+            lit_shader.set_vec3("u_material.specular", glm::vec3(0.5, 0.5, 0.5));
+            lit_shader.set_float("u_material.shininess", 32.0);
+
+            lit_shader.set_vec3("u_light.ambient", glm::vec3(0.2, 0.2, 0.2));
+            lit_shader.set_vec3("u_light.diffuse", glm::vec3(0.5, 0.5, 0.5)); // darken diffuse light a bit
+            lit_shader.set_vec3("u_light.specular", glm::vec3(1.0, 1.0, 1.0));
+            lit_shader.set_vec3("u_light.position", light_pos);
 
             lit_shader.set_mat4("projection", projection);
             lit_shader.set_mat4("view", view);
