@@ -47,18 +47,22 @@ fn main() {
         gl::ClearColor(0.2f32, 0.3f32, 0.3f32, 1.0f32);
     }
 
+    // 3 floats for vertex position
+    // 3 floats for vertex normals
     let verts = vec![
-        -0.5, -0.5, -0.5, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5, 0.5,
-        -0.5, 1.0, 1.0, -0.5, 0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 0.0, -0.5, -0.5, 0.5,
-        0.0, 0.0, 0.5, -0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 1.0, -0.5,
-        0.5, 0.5, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, 0.5, 0.5, 1.0, 0.0, -0.5, 0.5, -0.5,
-        1.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0,
-        0.0, -0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5,
-        -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5,
-        1.0, 0.0, -0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 1.0, 1.0, 0.5, -0.5, 0.5, 1.0, 0.0,
-        0.5, -0.5, 0.5, 1.0, 0.0, -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, 0.5,
-        -0.5, 0.0, 1.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0,
-        -0.5, 0.5, 0.5, 0.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0f32,
+        -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, 0.5, -0.5, 0.0,
+        0.0, -1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, -0.5,
+        -0.5, 0.0, 0.0, -1.0, -0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5,
+        0.5, 0.5, 0.0, 0.0, 1.0, 0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5,
+        -0.5, 0.5, 0.0, 0.0, 1.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0, -0.5, 0.5, -0.5, -1.0, 0.0, 0.0,
+        -0.5, -0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, 0.5, -1.0,
+        0.0, 0.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 0.5, 0.5, -0.5,
+        1.0, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5,
+        0.5, 1.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.5,
+        -0.5, -0.5, 0.0, -1.0, 0.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0,
+        -0.5, -0.5, 0.5, 0.0, -1.0, 0.0, -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, -0.5, 0.5, -0.5, 0.0,
+        1.0, 0.0, 0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0,
+        1.0, 0.0, -0.5, 0.5, 0.5, 0.0, 1.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.0f32,
     ];
 
     println!(
@@ -70,18 +74,28 @@ fn main() {
             .unwrap()
     );
 
-    let shader_program =
-        shader::ShaderProgram::new("assets/shaders/simple.vert", "assets/shaders/simple.frag");
+    let lit_shader = shader::ShaderProgram::new(
+        "assets/shaders/lit-untextured.vert",
+        "assets/shaders/lit-untextured.frag",
+    );
 
-    let mut vao = 0u32;
-    let mut vbo = 0u32;
-    let mut ebo = 0u32;
+    let light_shader = shader::ShaderProgram::new(
+        "assets/shaders/lit-untextured.vert",
+        "assets/shaders/light.frag",
+    );
+
+    let mut cube_vbo = 0u32;
+    let mut lit_vao = 0u32;
+    let mut light_vao = 0u32;
     unsafe {
-        gl::GenVertexArrays(1, &mut vao);
-        gl::BindVertexArray(vao);
+        // Lit object setup
+        lit_shader.use_program();
 
-        gl::GenBuffers(1, &mut vbo);
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+        gl::GenVertexArrays(1, &mut lit_vao);
+        gl::BindVertexArray(lit_vao);
+
+        gl::GenBuffers(1, &mut cube_vbo);
+        gl::BindBuffer(gl::ARRAY_BUFFER, cube_vbo);
         gl::BufferData(
             gl::ARRAY_BUFFER,
             (size_of::<f32>() * verts.len()) as isize,
@@ -89,107 +103,65 @@ fn main() {
             gl::STATIC_DRAW,
         );
 
-        shader_program.use_program();
-
         gl::VertexAttribPointer(
-            0,                           // Atribute location
-            3,                           // Number of elements to send
-            gl::FLOAT,                   // Element type
-            gl::FALSE,                   // Normalized? (for converting ints to floats)
-            5 * size_of::<f32>() as i32, // Stride between each attribute group
-            std::ptr::null(),            // Offset to read the first group from
+            0,
+            3,
+            gl::FLOAT,
+            gl::FALSE,
+            6 * size_of::<f32>() as i32,
+            std::ptr::null(),
         );
 
         gl::EnableVertexAttribArray(0);
 
         gl::VertexAttribPointer(
             1,
-            2,
+            3,
             gl::FLOAT,
             gl::FALSE,
-            5 * size_of::<f32>() as i32,
+            6 * size_of::<f32>() as i32,
             (3 * size_of::<f32>()) as *const _,
         );
 
         gl::EnableVertexAttribArray(1);
 
-        gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
+        light_shader.use_program();
+
+        // Light setup
+        gl::GenVertexArrays(1, &mut light_vao);
+        gl::BindVertexArray(light_vao);
+
+        gl::BindBuffer(gl::ARRAY_BUFFER, cube_vbo); // Reuse the vbo from the cube
+
+        gl::VertexAttribPointer(
+            0,
+            3,
+            gl::FLOAT,
+            gl::FALSE,
+            6 * size_of::<f32>() as i32, // Skip texture coordinates and normals
+            std::ptr::null(),
+        );
+
+        gl::EnableVertexAttribArray(0);
+
         gl::Enable(gl::DEPTH_TEST);
     }
-
-    let container = image::io::Reader::open("assets/textures/container.jpg")
-        .unwrap()
-        .decode()
-        .unwrap();
-
-    let awesomeface = image::io::Reader::open("assets/textures/awesomeface.png")
-        .unwrap()
-        .decode()
-        .unwrap()
-        .flipv();
-
-    let container_w = container.width() as i32;
-    let container_h = container.height() as i32;
-
-    let awesome_w = awesomeface.width() as i32;
-    let awesome_h = awesomeface.height() as i32;
-
-    let mut container_id = 0;
-    let mut awesome_id = 0;
-    unsafe {
-        gl::GenTextures(1, &mut container_id);
-        gl::BindTexture(gl::TEXTURE_2D, container_id);
-        gl::TexImage2D(
-            gl::TEXTURE_2D,
-            0,
-            gl::RGB as i32,
-            container_w,
-            container_h,
-            0,
-            gl::RGB,
-            gl::UNSIGNED_BYTE,
-            container.as_bytes().as_ptr().cast(),
-        );
-        gl::GenerateMipmap(gl::TEXTURE_2D);
-
-        gl::GenTextures(1, &mut awesome_id);
-        gl::BindTexture(gl::TEXTURE_2D, awesome_id);
-        gl::TexImage2D(
-            gl::TEXTURE_2D,
-            0,
-            gl::RGB as i32,
-            awesome_w,
-            awesome_h,
-            0,
-            gl::RGBA,
-            gl::UNSIGNED_BYTE,
-            awesomeface.as_bytes().as_ptr().cast(),
-        );
-        gl::GenerateMipmap(gl::TEXTURE_2D);
-        gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
-    }
-
-    let cube_positions = vec![
-        glm::vec3(0.0, 0.0, 0.0),
-        glm::vec3(2.0, 5.0, -15.0),
-        glm::vec3(-1.5, -2.2, -2.5),
-        glm::vec3(-3.8, -2.0, -12.3),
-        glm::vec3(2.4, -0.4, -3.5),
-        glm::vec3(-1.7, 3.0, -7.5),
-        glm::vec3(1.3, -2.0, -2.5),
-        glm::vec3(1.5, 2.0, -2.5),
-        glm::vec3(1.5, 0.2, -1.5),
-        glm::vec3(-1.3, 1.0, -1.5),
-    ];
 
     let mut last_frame = 0.0f32;
 
     let mut input = InputSystem::new();
     let mut camera = Camera::new(
-        &glm::vec3(0.0, 0.0, 3.0f32),
+        &glm::vec3(0.0, 0.0, 2.0f32),
         &glm::vec3(0.0, 1.0, 0.0f32),
         &glm::vec2(0.0, 0.0),
     );
+
+    let container_pos = glm::vec3(0.0, 0.0, 0.0);
+    let container_model_mat = glm::translation(&container_pos);
+
+    let light_pos = glm::vec3(0.6, 1.2, 0.6);
+    let mut light_model_mat = glm::translation(&light_pos);
+    light_model_mat = glm::scale(&light_model_mat, &glm::vec3(0.05, 0.05, 0.05));
 
     while !window.should_close() {
         let current_frame = glfw.get_time() as f32;
@@ -206,19 +178,6 @@ fn main() {
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
-            gl::ActiveTexture(gl::TEXTURE0);
-            gl::BindTexture(gl::TEXTURE_2D, container_id);
-
-            gl::ActiveTexture(gl::TEXTURE1);
-            gl::BindTexture(gl::TEXTURE_2D, awesome_id);
-
-            shader_program.use_program();
-            gl::BindVertexArray(vao);
-
-            // Set sampler `tex1` to read from texture unit 0
-            shader_program.set_int("texture1", 0);
-            shader_program.set_int("texture2", 1);
-
             let view = camera.get_view_matrix();
 
             let projection = glm::perspective_fov(
@@ -229,25 +188,25 @@ fn main() {
                 100.0f32,
             );
 
-            shader_program.set_mat4("view", view);
-            shader_program.set_mat4("projection", projection);
+            lit_shader.use_program();
+            lit_shader.set_vec3("u_object_color", glm::vec3(1.0, 0.5, 0.31));
+            lit_shader.set_vec3("u_light_color", glm::vec3(1.0, 1.0, 1.0));
+            lit_shader.set_vec3("u_light_pos", light_pos);
+            lit_shader.set_vec3("u_view_pos", camera.get_pos());
 
-            for i in 0..10 {
-                let mut model = glm::translation(&cube_positions[i]);
+            lit_shader.set_mat4("projection", projection);
+            lit_shader.set_mat4("view", view);
+            lit_shader.set_mat4("model", container_model_mat);
 
-                let angle = 20.0f32 * i as f32;
+            gl::BindVertexArray(lit_vao);
+            gl::DrawArrays(gl::TRIANGLES, 0, 36);
 
-                model = glm::rotate(
-                    &model,
-                    angle.to_radians(),
-                    &glm::make_vec3::<f32>(&[1.0, 0.3, 0.5f32]),
-                );
-
-                shader_program.set_mat4("model", model);
-
-                gl::DrawArrays(gl::TRIANGLES, 0, 36);
-            }
-            // gl::DrawElements(gl::TRIANGLES, 36, gl::UNSIGNED_INT, std::ptr::null());
+            light_shader.use_program();
+            light_shader.set_mat4("projection", projection);
+            light_shader.set_mat4("view", view);
+            light_shader.set_mat4("model", light_model_mat);
+            gl::BindVertexArray(light_vao);
+            gl::DrawArrays(gl::TRIANGLES, 0, 36);
         }
 
         last_frame = current_frame;

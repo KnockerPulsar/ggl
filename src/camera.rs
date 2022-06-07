@@ -65,6 +65,14 @@ impl Camera {
             self.pos += dt * self.right * self.movement_speed;
         }
 
+        if input.is_down(Key::Q) {
+            self.pos -= dt * self.up * self.movement_speed;
+        }
+
+        if input.is_down(Key::E) {
+            self.pos += dt * self.up * self.movement_speed;
+        }
+
         self.angles.x += input.mouse_delta().y * self.mouse_sensitivity * dt;
         self.angles.y -= input.mouse_delta().x * self.mouse_sensitivity * dt;
 
@@ -91,5 +99,9 @@ impl Camera {
 
     pub fn get_fov(&self) -> f32 {
         self.fov
+    }
+
+    pub fn get_pos(&self) -> Vec3 {
+        self.pos
     }
 }

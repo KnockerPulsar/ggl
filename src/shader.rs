@@ -68,6 +68,12 @@ impl ShaderProgram {
         }
     }
 
+    pub fn set_vec3(&self, name: &str, value: glm::Vec3) {
+        unsafe {
+            gl::Uniform3f(self.get_uniform_location(name), value.x, value.y, value.z);
+        }
+    }
+
     pub fn set_mat4(&self, name: &str, value: glm::Mat4) {
         unsafe {
             gl::UniformMatrix4fv(
