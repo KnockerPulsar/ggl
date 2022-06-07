@@ -11,27 +11,32 @@ mod shader;
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+
+    let (window_width, window_height) = (1280, 720) as (i32, i32);
+
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 3));
     glfw.window_hint(glfw::WindowHint::OpenGlProfile(
         glfw::OpenGlProfileHint::Core,
     ));
-
     let (mut window, events) = glfw
         .create_window(
-            300,
-            300,
+            window_width as u32,
+            window_height as u32,
             "Hello, this is a window.",
             glfw::WindowMode::Windowed,
         )
         .expect("Failed to create GLFW window.");
 
     window.set_key_polling(true);
+    window.set_cursor_pos_polling(true);
+    window.set_scroll_polling(true);
+    window.set_sticky_keys(true);
     window.make_current();
 
     gl::load_with(|s| window.get_proc_address(s) as *const _);
 
     unsafe {
-        gl::Viewport(0, 0, 300, 300);
+        gl::Viewport(0, 0, window_width, window_height);
         gl::ClearColor(0.2f32, 0.3f32, 0.3f32, 1.0f32);
     }
 
@@ -169,12 +174,35 @@ fn main() {
         glm::vec3(-1.3, 1.0, -1.5),
     ];
 
-    let mut polygon_mode = false;
-    while !window.should_close() {
-        glfw.poll_events();
+    let mut camera_pos = glm::vec3(0.0, 0.0, 3.0f32);
+    let mut camera_front = glm::vec3(0.0, 0.0, -1.0f32);
+    let camera_up = glm::vec3(0.0, 1.0, 0.0f32);
+    let mut last_mouse_pos = glm::vec2(0.0, 0.0);
+    let mut camera_rotation = glm::vec3(0.0, -90.0, 0.0);
 
+    let mut polygon_mode = false; // True = filled triangles, false = lines
+
+    let mut dt = 0.0f32;
+    let mut last_frame = 0.0f32;
+
+    while !window.should_close() {
+        let current_frame = glfw.get_time() as f32;
+        dt = current_frame - last_frame;
+        last_frame = current_frame;
+
+        glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
-            handle_window_event(&mut window, event, &mut polygon_mode);
+            handle_window_event(
+                &mut window,
+                event,
+                &dt,
+                &mut polygon_mode,
+                &mut camera_pos,
+                &camera_front,
+                &camera_up,
+                &mut last_mouse_pos,
+                &mut camera_rotation,
+            );
         }
 
         unsafe {
@@ -193,17 +221,23 @@ fn main() {
             shader_program.set_int("texture1", 0);
             shader_program.set_int("texture2", 1);
 
-            let radius = 10.0f64;
-            let cam_x = (glfw.get_time().sin() * radius) as f32;
-            let cam_z = (glfw.get_time().cos() * radius) as f32;
+            let direction = glm::vec3(
+                camera_rotation.y.to_radians().cos() * camera_rotation.x.to_radians().cos(),
+                camera_rotation.x.to_radians().sin(),
+                camera_rotation.y.to_radians().sin() * camera_rotation.x.to_radians().cos(),
+            );
 
-            let camera_pos = glm::vec3(cam_x, 0.0f32, cam_z);
-            let camera_target = glm::vec3(0.0, 0.0, 0.0f32);
-            let up = glm::vec3(0.0, 1.0, 0.0f32);
-            let view = glm::look_at(&camera_pos, &camera_target, &up);
+            camera_front = direction.normalize();
 
-            let projection =
-                glm::perspective_fov(45.0f32.to_radians(), 300f32, 300f32, 0.1f32, 100.0f32);
+            let view = glm::look_at(&camera_pos, &(camera_pos + camera_front), &camera_up);
+
+            let projection = glm::perspective_fov(
+                45.0f32.to_radians(),
+                window_width as f32,
+                window_height as f32,
+                0.1f32,
+                100.0f32,
+            );
 
             shader_program.set_mat4("view", view);
             shader_program.set_mat4("projection", projection);
@@ -233,8 +267,16 @@ fn main() {
 fn handle_window_event(
     window: &mut glfw::Window,
     event: glfw::WindowEvent,
+    dt: &f32,
     polygon_mode: &mut bool,
+    camera_pos: &mut glm::Vec3,
+    camera_front: &glm::Vec3,
+    camera_up: &glm::Vec3,
+    last_mouse_pos: &mut glm::Vec2,
+    camera_rotation: &mut glm::Vec3,
 ) {
+    let camera_speed = 2.5 * dt;
+
     match event {
         glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) => {
             window.set_should_close(true);
@@ -249,6 +291,36 @@ fn handle_window_event(
                     gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
                 }
             }
+        }
+        glfw::WindowEvent::Key(Key::W, _, _, _) => {
+            *camera_pos += camera_speed * camera_front;
+        }
+        glfw::WindowEvent::Key(Key::S, _, _, _) => {
+            *camera_pos -= camera_speed * camera_front;
+        }
+        glfw::WindowEvent::Key(Key::A, _, _, _) => {
+            let camera_right = glm::normalize(&glm::cross(&camera_front, &camera_up));
+            *camera_pos -= camera_speed * camera_right;
+        }
+        glfw::WindowEvent::Key(Key::D, _, _, _) => {
+            let camera_right = glm::normalize(&glm::cross(&camera_front, &camera_up));
+            *camera_pos += camera_speed * camera_right;
+        }
+        glfw::WindowEvent::CursorPos(x, y) => {
+            let mut dx = x as f32 - last_mouse_pos.x;
+            let mut dy = last_mouse_pos.y - y as f32;
+
+            last_mouse_pos.x = x as f32;
+            last_mouse_pos.y = y as f32;
+
+            let sensitivity = 0.1f32;
+            dx *= sensitivity;
+            dy *= sensitivity;
+
+            camera_rotation.x += dy as f32;
+            camera_rotation.y += dx as f32;
+
+            camera_rotation.x.clamp(-89.0f32, 89.0f32);
         }
         _ => {}
     }
