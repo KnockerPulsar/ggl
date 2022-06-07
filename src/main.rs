@@ -3,11 +3,16 @@ extern crate glfw;
 extern crate image;
 extern crate nalgebra_glm as glm;
 
-use glfw::{Action, Context, Key};
+use glfw::Context;
 use std::env;
 use std::mem::size_of;
 
+mod camera;
+mod input;
 mod shader;
+
+use camera::Camera;
+use input::InputSystem;
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
@@ -18,6 +23,8 @@ fn main() {
     glfw.window_hint(glfw::WindowHint::OpenGlProfile(
         glfw::OpenGlProfileHint::Core,
     ));
+    glfw.window_hint(glfw::WindowHint::Floating(true));
+
     let (mut window, events) = glfw
         .create_window(
             window_width as u32,
@@ -159,6 +166,7 @@ fn main() {
             awesomeface.as_bytes().as_ptr().cast(),
         );
         gl::GenerateMipmap(gl::TEXTURE_2D);
+        gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
     }
 
     let cube_positions = vec![
@@ -174,36 +182,26 @@ fn main() {
         glm::vec3(-1.3, 1.0, -1.5),
     ];
 
-    let mut camera_pos = glm::vec3(0.0, 0.0, 3.0f32);
-    let mut camera_front = glm::vec3(0.0, 0.0, -1.0f32);
-    let camera_up = glm::vec3(0.0, 1.0, 0.0f32);
-    let mut last_mouse_pos = glm::vec2(0.0, 0.0);
-    let mut camera_rotation = glm::vec3(0.0, -90.0, 0.0);
-
-    let mut polygon_mode = false; // True = filled triangles, false = lines
-
-    let mut dt = 0.0f32;
     let mut last_frame = 0.0f32;
+
+    let mut input = InputSystem::new();
+    let mut camera = Camera::new(
+        &glm::vec3(0.0, 0.0, 3.0f32),
+        &glm::vec3(0.0, 1.0, 0.0f32),
+        &glm::vec2(0.0, 0.0),
+    );
 
     while !window.should_close() {
         let current_frame = glfw.get_time() as f32;
-        dt = current_frame - last_frame;
-        last_frame = current_frame;
 
         glfw.poll_events();
+        let mut glfw_events = std::vec::Vec::<glfw::WindowEvent>::new();
         for (_, event) in glfw::flush_messages(&events) {
-            handle_window_event(
-                &mut window,
-                event,
-                &dt,
-                &mut polygon_mode,
-                &mut camera_pos,
-                &camera_front,
-                &camera_up,
-                &mut last_mouse_pos,
-                &mut camera_rotation,
-            );
+            glfw_events.push(event);
         }
+
+        input.handle_glfw(glfw_events, &(current_frame - last_frame));
+        camera.update(&input);
 
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
@@ -221,18 +219,10 @@ fn main() {
             shader_program.set_int("texture1", 0);
             shader_program.set_int("texture2", 1);
 
-            let direction = glm::vec3(
-                camera_rotation.y.to_radians().cos() * camera_rotation.x.to_radians().cos(),
-                camera_rotation.x.to_radians().sin(),
-                camera_rotation.y.to_radians().sin() * camera_rotation.x.to_radians().cos(),
-            );
-
-            camera_front = direction.normalize();
-
-            let view = glm::look_at(&camera_pos, &(camera_pos + camera_front), &camera_up);
+            let view = camera.get_view_matrix();
 
             let projection = glm::perspective_fov(
-                45.0f32.to_radians(),
+                camera.get_fov().to_radians(),
                 window_width as f32,
                 window_height as f32,
                 0.1f32,
@@ -260,68 +250,7 @@ fn main() {
             // gl::DrawElements(gl::TRIANGLES, 36, gl::UNSIGNED_INT, std::ptr::null());
         }
 
+        last_frame = current_frame;
         window.swap_buffers();
-    }
-}
-
-fn handle_window_event(
-    window: &mut glfw::Window,
-    event: glfw::WindowEvent,
-    dt: &f32,
-    polygon_mode: &mut bool,
-    camera_pos: &mut glm::Vec3,
-    camera_front: &glm::Vec3,
-    camera_up: &glm::Vec3,
-    last_mouse_pos: &mut glm::Vec2,
-    camera_rotation: &mut glm::Vec3,
-) {
-    let camera_speed = 2.5 * dt;
-
-    match event {
-        glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) => {
-            window.set_should_close(true);
-        }
-        glfw::WindowEvent::Key(Key::F, _, Action::Press, _) => {
-            *polygon_mode = !(*polygon_mode);
-
-            unsafe {
-                if *polygon_mode {
-                    gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
-                } else {
-                    gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
-                }
-            }
-        }
-        glfw::WindowEvent::Key(Key::W, _, _, _) => {
-            *camera_pos += camera_speed * camera_front;
-        }
-        glfw::WindowEvent::Key(Key::S, _, _, _) => {
-            *camera_pos -= camera_speed * camera_front;
-        }
-        glfw::WindowEvent::Key(Key::A, _, _, _) => {
-            let camera_right = glm::normalize(&glm::cross(&camera_front, &camera_up));
-            *camera_pos -= camera_speed * camera_right;
-        }
-        glfw::WindowEvent::Key(Key::D, _, _, _) => {
-            let camera_right = glm::normalize(&glm::cross(&camera_front, &camera_up));
-            *camera_pos += camera_speed * camera_right;
-        }
-        glfw::WindowEvent::CursorPos(x, y) => {
-            let mut dx = x as f32 - last_mouse_pos.x;
-            let mut dy = last_mouse_pos.y - y as f32;
-
-            last_mouse_pos.x = x as f32;
-            last_mouse_pos.y = y as f32;
-
-            let sensitivity = 0.1f32;
-            dx *= sensitivity;
-            dy *= sensitivity;
-
-            camera_rotation.x += dy as f32;
-            camera_rotation.y += dx as f32;
-
-            camera_rotation.x.clamp(-89.0f32, 89.0f32);
-        }
-        _ => {}
     }
 }
