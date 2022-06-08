@@ -1,9 +1,8 @@
-extern crate glfw;
 extern crate nalgebra_glm;
 
 use crate::InputSystem;
-use glfw::Key;
 use glm::*;
+use glutin::event;
 use nalgebra_glm as glm;
 
 pub struct Camera {
@@ -49,32 +48,34 @@ impl Camera {
     pub fn update(&mut self, input: &InputSystem) {
         let dt = input.get_dt();
 
-        if input.is_down(Key::W) {
+        if input.is_down(event::VirtualKeyCode::W) {
             self.pos += dt * self.forward * self.movement_speed;
         }
 
-        if input.is_down(Key::S) {
+        if input.is_down(event::VirtualKeyCode::S) {
             self.pos -= dt * self.forward * self.movement_speed;
         }
 
-        if input.is_down(Key::A) {
+        if input.is_down(event::VirtualKeyCode::A) {
             self.pos -= dt * self.right * self.movement_speed;
         }
 
-        if input.is_down(Key::D) {
+        if input.is_down(event::VirtualKeyCode::D) {
             self.pos += dt * self.right * self.movement_speed;
         }
 
-        if input.is_down(Key::Q) {
+        if input.is_down(event::VirtualKeyCode::Q) {
             self.pos -= dt * self.up * self.movement_speed;
         }
 
-        if input.is_down(Key::E) {
+        if input.is_down(event::VirtualKeyCode::E) {
             self.pos += dt * self.up * self.movement_speed;
         }
 
-        self.angles.x += input.mouse_delta().y * self.mouse_sensitivity * dt;
+        self.angles.x -= input.mouse_delta().y * self.mouse_sensitivity * dt;
         self.angles.y -= input.mouse_delta().x * self.mouse_sensitivity * dt;
+
+        self.angles.x = self.angles.x.clamp(-89.0, 89.0f32);
 
         if input.mouse_delta().norm_squared() > 0.0f32 {
             (self.forward, self.right, self.up) =
