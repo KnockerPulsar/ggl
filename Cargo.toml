@@ -3,12 +3,12 @@ name = "ggl"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 nalgebra-glm = "^0.17.0"
 image = "^0.24.2"
-egui = "^0.18.1"
-glow = "*"
-egui_glow = "*"
-glutin = "*"
+bytemuck = "1.7"
+memoffset = "0.6"
+tracing = "0.1"
+glutin = "0.28.0"
+glow = "0.10.0"

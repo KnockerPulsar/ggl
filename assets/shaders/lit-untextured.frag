@@ -144,7 +144,13 @@ vec3 computeSpotLight(SpotLight light, vec3 normal, vec3 frag_pos, vec3 view_dir
     vec3 emissive = texture(u_material.emissive, tex_coord).rgb;
     
     float theta = dot(light_dir, normalize(-light.direction));
-    float intensity = 1;
+
+    // cos is inversely prop. with the angle
+    // cos(0) =    pi/2
+    // cos(pi/2) = 0
+
+    // cos (15 deg) > cos(20 degsj)
+    float intensity = smoothstep(light.cutoff_cos.y, light.cutoff_cos.x, theta);
 
     ambient *= attenuation * intensity;
     diffuse *= attenuation * intensity;
