@@ -5,18 +5,21 @@ extern crate nalgebra_glm as glm;
 
 use glutin::event::{Event, WindowEvent};
 use glutin::event_loop::ControlFlow;
-use glutin::WindowedContext;
+use light::*;
 use std::env;
 use std::mem::size_of;
 
 mod camera;
 mod input;
+mod light;
 mod shader;
+mod texture;
 
 use camera::Camera;
 use glow::*;
 use input::InputSystem;
 use std::rc::Rc;
+use texture::Texture2D;
 
 type Window = glutin::WindowedContext<glutin::PossiblyCurrent>;
 
@@ -49,7 +52,7 @@ fn main() {
 
     unsafe {
         gl_rc.viewport(0, 0, window_width, window_height);
-        gl_rc.clear_color(0.5, 0.1, 0.5, 1.0f32);
+        gl_rc.clear_color(0.05, 0.05, 0.05, 1.0f32);
     }
 
     // 3 floats for vertex position
@@ -84,9 +87,9 @@ fn main() {
             .unwrap()
     );
 
-    let container_diff_id = load_texture(&gl_rc, "assets/textures/container2.png");
-    let container_spec_id = load_texture(&gl_rc, "assets/textures/container2_specular.png");
-    let container_emissive_id = load_texture(&gl_rc, "assets/textures/container2_emissive.png");
+    let container_diff = Texture2D::load(&gl_rc, "assets/textures/container2.png");
+    let container_spec = Texture2D::load(&gl_rc, "assets/textures/container2_specular.png");
+    let container_emissive = Texture2D::load(&gl_rc, "assets/textures/container2_emissive.png");
 
     let lit_shader = shader::ShaderProgram::new(
         &gl_rc,
@@ -172,8 +175,6 @@ fn main() {
     let mut light_model_mat = glm::translation(&light_pos);
     light_model_mat = glm::scale(&light_model_mat, &glm::vec3(0.05, 0.05, 0.05));
 
-    let mut spot_0_angles: glm::Vec2 = glm::vec2(2.5f32.to_radians().cos(), 5f32.to_radians().cos());
-
     unsafe {
         event_loop.run(
             move |event, _, control_flow: &mut glutin::event_loop::ControlFlow| {
@@ -198,9 +199,9 @@ fn main() {
                             window_width,
                             window_height,
                             &lit_shader,
-                            container_diff_id,
-                            container_spec_id,
-                            container_emissive_id,
+                            &container_diff,
+                            &container_spec,
+                            &container_emissive,
                             light_pos,
                             container_model_mat,
                             lit_vao,
@@ -208,7 +209,6 @@ fn main() {
                             light_model_mat,
                             light_vao,
                             &window,
-                            &mut spot_0_angles,
                         );
 
                         input.frame_end();
@@ -226,7 +226,7 @@ fn main() {
                         WindowEvent::KeyboardInput { .. }
                         | WindowEvent::CursorMoved { .. }
                         | WindowEvent::MouseInput { .. } => {
-                            input.handle_events(&event);                          
+                            input.handle_events(&event);
                         }
                         _ => (),
                     },
@@ -244,9 +244,9 @@ unsafe fn draw(
     window_width: i32,
     window_height: i32,
     lit_shader: &shader::ShaderProgram,
-    container_diff_id: Texture,
-    container_spec_id: Texture,
-    container_emissive_id: Texture,
+    container_diff: &Texture2D,
+    container_spec: &Texture2D,
+    container_emissive: &Texture2D,
     light_pos: glm::Vec3,
     container_model_mat: glm::Mat4,
     lit_vao: VertexArray,
@@ -254,7 +254,6 @@ unsafe fn draw(
     light_model_mat: glm::Mat4,
     light_vao: VertexArray,
     window: &glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>,
-    spot_0_angles: &mut glm::Vec2,
 ) {
     camera.update(input);
     gl_rc.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
@@ -271,116 +270,62 @@ unsafe fn draw(
     lit_shader.use_program(&gl_rc);
 
     lit_shader.set_vec3(&gl_rc, "u_view_pos", camera.get_pos());
-    lit_shader.set_vec3(&gl_rc, "u_material.specular", glm::vec3(0.5, 0.5, 0.5));
+
+    container_diff.use_texture(&gl_rc, 0, "u_material.diffuse", lit_shader);
+    container_spec.use_texture(&gl_rc, 1, "u_material.specular", lit_shader);
+    container_emissive.use_texture(&gl_rc, 2, "u_material.emissive", lit_shader);
     lit_shader.set_float(&gl_rc, "u_material.shininess", 32.0);
-    lit_shader.set_int(&gl_rc, "u_material.diffuse", 0);
 
-    gl_rc.active_texture(glow::TEXTURE0);
-    gl_rc.bind_texture(glow::TEXTURE_2D, Some(container_diff_id));
-    lit_shader.set_int(&gl_rc, "u_material.specular", 1);
+    let dir_light = DirectionalLight {
+        enabled: false,
+        direction: glm::vec3(1.0, -0.3, 1.0),
+        colors: LightColors {
+            ambient: glm::vec3(0.5, 0.5, 0.1),
+            diffuse: glm::vec3(0.9, 0.9, 0.2),
+            specular: glm::vec3(1.0, 1.0, 1.0),
+        },
+    };
 
-    gl_rc.active_texture(glow::TEXTURE1);
-    gl_rc.bind_texture(glow::TEXTURE_2D, Some(container_spec_id));
-    lit_shader.set_int(&gl_rc, "u_material.emissive", 2);
+    if (dir_light.is_enabled()) {
+        dir_light.upload_data(&gl_rc, "u_directional_light", &lit_shader);
+    }
 
-    gl_rc.active_texture(glow::TEXTURE2);
-    gl_rc.bind_texture(glow::TEXTURE_2D, Some(container_emissive_id));
+    let point_lights = get_point_lights(&light_pos);
 
-    // lit_shader.set_vec3(
-    //     &gl_rc,
-    //     "u_directional_light.direction",
-    //     glm::vec3(1.0, -0.3, 1.0),
-    // );
-    // lit_shader.set_vec3(&gl_rc, "u_directional_light.ambient", glm::vec3(0.5, 0.5, 0.1));
-    // lit_shader.set_vec3(&gl_rc, "u_directional_light.diffuse", glm::vec3(0.9, 0.9, 0.2));
-    // lit_shader.set_vec3(
-    //     &gl_rc,
-    //     "u_directional_light.specular",
-    //     glm::vec3(1.0, 1.0, 1.0),
-    // );
-
-    // lit_shader.set_int("&gl_rc, u_num_point_lights", 2);
-    // lit_shader.set_vec3(&gl_rc, "u_point_lights[0].position", light_pos);
-    // lit_shader.set_vec3(&gl_rc, "u_point_lights[0].ambient", glm::vec3(0.1, 0.0, 0.0));
-    // lit_shader.set_vec3(&gl_rc, "u_point_lights[0].diffuse", glm::vec3(1.0, 0.0, 0.0));
-    // lit_shader.set_vec3(&gl_rc, "u_point_lights[0].specular", glm::vec3(0.0, 1.0, 1.0));
-    // lit_shader.set_vec3(&gl_rc,
-    //     "u_point_lights[0].attenuation_constants",
-    //     glm::vec3(1.0, 0.0, 1.0),
-    // );
-    // lit_shader.set_vec3(&gl_rc,
-    //     "u_point_lights[1].position",
-    //     light_pos + glm::vec3(-2.0, -2.0, -2.0),
-    // );
-    // lit_shader.set_vec3(&gl_rc, "u_point_lights[1].ambient", glm::vec3(0.0, 0.0, 0.1));
-    // lit_shader.set_vec3(&gl_rc, "u_point_lights[1].diffuse", glm::vec3(0.0, 0.0, 0.9));
-    // lit_shader.set_vec3(&gl_rc, "u_point_lights[1].specular", glm::vec3(0.0, 1.0, 0.0));
-    // lit_shader.set_vec3(&gl_rc,
-    //     "u_point_lights[1].attenuation_constants",
-    //     glm::vec3(0.1, 0.0, 1.0),
-    // );
-
-    lit_shader.set_int(&gl_rc, "u_num_spot_lights", 2);
-
-    lit_shader.set_vec3(&gl_rc, "u_spot_lights[0].position", light_pos);
-    lit_shader.set_vec3(&gl_rc, "u_spot_lights[0].direction", -light_pos);
-    lit_shader.set_vec3(
+    lit_shader.set_int(
         &gl_rc,
-        "u_spot_lights[0].ambient",
-        glm::vec3(0.1f32, 0.0, 0.0),
-    );
-    lit_shader.set_vec3(
-        &gl_rc,
-        "u_spot_lights[0].diffuse",
-        glm::vec3(10.0, 0.0, 0.0),
-    );
-    lit_shader.set_vec3(
-        &gl_rc,
-        "u_spot_lights[0].specular",
-        glm::vec3(0.0, 10.0, 10.0),
-    );
-    lit_shader.set_vec3(
-        &gl_rc,
-        "u_spot_lights[0].attenuation_constants",
-        glm::vec3(1.0, 0.0, 1.0),
-    );
-    lit_shader.set_vec2(&gl_rc, "u_spot_lights[0].cutoff_cos", *spot_0_angles);
-    lit_shader.set_vec3(
-        &gl_rc,
-        "u_spot_lights[1].position",
-        light_pos + glm::vec3(-2.0, -2.0, -2.0),
-    );
-    lit_shader.set_vec3(
-        &gl_rc,
-        "u_spot_lights[1].direction",
-        -(light_pos + glm::vec3(-2.0, -2.0, -2.0)),
+        "u_num_point_lights",
+        point_lights
+            .iter()
+            .filter(|light| light.is_enabled())
+            .count() as i32, // ! Count only enabled lights
     );
 
-    lit_shader.set_vec3(
+    let mut curr_point = 0;
+    for light in point_lights.iter() {
+        if light.is_enabled() {
+            light.upload_data(&gl_rc, &format!("u_point_lights[{}]", curr_point), lit_shader);
+            curr_point+=1;
+        }
+    }
+
+    let spot_lights = get_spot_lights(&light_pos);
+    lit_shader.set_int(
         &gl_rc,
-        "u_spot_lights[1].ambient",
-        glm::vec3(0.0, 0.0, 0.1f32),
+        "u_num_spot_lights",
+        spot_lights
+            .iter()
+            .filter(|light| light.is_enabled())
+            .count() as i32, // ! Count only enabled lights
     );
-    lit_shader.set_vec3(
-        &gl_rc,
-        "u_spot_lights[1].diffuse",
-        glm::vec3(0.0, 1.0, 0.0f32),
-    );
-    lit_shader.set_vec3(
-        &gl_rc,
-        "u_spot_lights[1].specular",
-        glm::vec3(1.0, 0.0, 0.0),
-    );
-    lit_shader.set_vec3(
-        &gl_rc,
-        "u_spot_lights[1].attenuation_constants",
-        glm::vec3(0.1, 0.0, 1.0),
-    );
-    lit_shader.set_vec2(
-        &gl_rc,
-        "u_spot_lights[1].cutoff_cos",
-        glm::vec2(4f32.to_radians().cos(), 10f32.to_radians().cos()),
-    );
+
+    let mut curr_spot = 0;
+    for light in spot_lights.iter() {
+        if light.is_enabled() {
+            light.upload_data(&gl_rc, &format!("u_spot_lights[{}]", curr_spot), lit_shader);
+            curr_spot += 1;
+        }
+    }
 
     lit_shader.set_mat4(&gl_rc, "projection", projection);
     lit_shader.set_mat4(&gl_rc, "view", view);
@@ -399,61 +344,57 @@ unsafe fn draw(
 
     window.swap_buffers().unwrap();
 }
-fn load_texture(gl: &Rc<glow::Context>, path: &str) -> glow::Texture {
-    let texture = image::io::Reader::open(path).unwrap().decode().unwrap();
 
-    let texture_w = texture.width() as i32;
-    let texture_h = texture.height() as i32;
+pub fn get_point_lights(light_pos: &glm::Vec3) -> Vec<Box<dyn Light>> {
+    vec![
+        Box::new(PointLight {
+            enabled: false,
+            position: *light_pos,
+            colors: LightColors {
+                ambient: glm::vec3(0.1, 0.9, 0.1),
+                diffuse: glm::vec3(2.0, 0.0, 0.0),
+                specular: glm::vec3(0.0, 1.0, 1.0),
+            },
+            attenuation_constants: glm::vec3(0.2, 0.0, 1.0),
+        }),
+        Box::new(PointLight {
+            enabled: false,
+            position: light_pos + glm::vec3(-2.0, -2.0, -2.0),
+            colors: LightColors {
+                ambient: glm::vec3(0.0, 0.0, 0.1),
+                diffuse: glm::vec3(0.0, 0.0, 0.9),
+                specular: glm::vec3(0.0, 1.0, 0.0),
+            },
+            attenuation_constants: glm::vec3(0.1, 0.0, 1.0),
+        }),
+    ]
+}
 
-    let texture_handle: glow::Texture;
-
-    unsafe {
-        let format = match texture.color() {
-            image::ColorType::L8 => glow::RGB,
-            image::ColorType::Rgb8 => glow::RGB,
-            image::ColorType::Rgba8 => glow::RGBA,
-            _ => {
-                panic!("Unsupported color type {:?}", texture.color());
-            }
-        };
-
-        println!("Loaded texture of format {:#?}", format);
-        println!(
-            "GL_RED = {:?}, GL_RGB = {:?}, GL_RGBA = {:?}",
-            glow::RED,
-            glow::RGB,
-            glow::RGBA
-        );
-
-        texture_handle = gl.create_texture().unwrap();
-
-        gl.bind_texture(glow::TEXTURE_2D, Some(texture_handle));
-        gl.tex_image_2d(
-            glow::TEXTURE_2D,
-            0,
-            format as i32,
-            texture_w,
-            texture_h,
-            0,
-            format as u32,
-            glow::UNSIGNED_BYTE,
-            Some(texture.as_bytes()),
-        );
-        gl.generate_mipmap(glow::TEXTURE_2D);
-
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::REPEAT as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::REPEAT as i32);
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MIN_FILTER,
-            glow::LINEAR_MIPMAP_LINEAR as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MAG_FILTER,
-            glow::LINEAR as i32,
-        );
-    }
-
-    texture_handle
+pub fn get_spot_lights(light_pos: &glm::Vec3) -> Vec<Box<dyn Light>> {
+    vec![
+        Box::new(SpotLight {
+            enabled: false,
+            position: *light_pos,
+            direction: -light_pos,
+            colors: LightColors {
+                ambient: glm::vec3(0.1f32, 0.0, 0.0),
+                diffuse: glm::vec3(10.0, 0.0, 0.0),
+                specular: glm::vec3(0.0, 10.0, 10.0),
+            },
+            attenuation_constants: glm::vec3(1.0, 0.0, 1.0),
+            cutoff_cosines: glm::vec2(2.5f32.to_radians().cos(), 5f32.to_radians().cos()),
+        }),
+        Box::new(SpotLight {
+            enabled: true,
+            position: light_pos + glm::vec3(-2.0, -2.0, -2.0),
+            direction: -(light_pos + glm::vec3(-2.0, -2.0, -2.0)),
+            colors: LightColors {
+                ambient: glm::vec3(0.0, 0.0, 0.1f32),
+                diffuse: glm::vec3(0.0, 1.0, 0.0f32),
+                specular: glm::vec3(1.0, 0.0, 0.0),
+            },
+            attenuation_constants: glm::vec3(0.1, 0.0, 1.0),
+            cutoff_cosines: glm::vec2(4f32.to_radians().cos(), 10f32.to_radians().cos()),
+        }),
+    ]
 }
