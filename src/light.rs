@@ -1,5 +1,5 @@
 use std::format;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::shader::ShaderProgram;
 use nalgebra_glm::*;
@@ -7,7 +7,7 @@ use nalgebra_glm::*;
 pub trait Light {
     fn upload_data(
         &self,
-        gl: &Rc<glow::Context>, // OpenGL context
+        gl: &Arc<glow::Context>, // OpenGL context
 
         //* String containing uniform name into light array
         //* Example: u_point_lights[0]
@@ -52,7 +52,7 @@ pub struct SpotLight {
 impl Light for DirectionalLight {
     fn upload_data(
         &self,
-        gl: &Rc<glow::Context>, // OpenGL context
+        gl: &Arc<glow::Context>, // OpenGL context
         uniform_name: &str,
         shader: &ShaderProgram,
     ) {
@@ -80,7 +80,7 @@ impl Light for DirectionalLight {
 }
 
 impl Light for PointLight {
-    fn upload_data(&self, gl: &Rc<glow::Context>, uniform_name: &str, shader: &ShaderProgram) {
+    fn upload_data(&self, gl: &Arc<glow::Context>, uniform_name: &str, shader: &ShaderProgram) {
         shader.set_vec3(&gl, &format!("{}.position", uniform_name), self.position);
         shader.set_vec3(
             &gl,
@@ -112,7 +112,7 @@ impl Light for PointLight {
 impl Light for SpotLight {
     fn upload_data(
         &self,
-        gl: &Rc<glow::Context>, // OpenGL context
+        gl: &Arc<glow::Context>, // OpenGL context
         uniform_name: &str,
         shader: &ShaderProgram,
     ) {

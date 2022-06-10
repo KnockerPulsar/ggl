@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use glow::HasContext;
 
@@ -9,7 +9,7 @@ pub struct Texture2D {
 }
 
 impl Texture2D {
-    pub fn load(gl: &Rc<glow::Context>, path: &str) -> Self {
+    pub fn load(gl: &Arc<glow::Context>, path: &str) -> Self {
         let texture = image::io::Reader::open(path).unwrap().decode().unwrap();
 
         let texture_w = texture.width() as i32;
@@ -72,7 +72,7 @@ impl Texture2D {
 
     pub fn use_texture(
         &self,
-        gl: &Rc<glow::Context>,
+        gl: &Arc<glow::Context>,
         texture_unit_index: u32,
         sampler_name: &str,
         shader: &ShaderProgram,
