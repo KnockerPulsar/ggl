@@ -45,7 +45,7 @@ impl Camera {
         }
     }
 
-    pub fn update(&mut self, input: &InputSystem) {
+    pub fn update(&mut self, input: &mut InputSystem) {
         let dt = input.get_dt();
 
         if input.is_down(event::VirtualKeyCode::W) {
@@ -72,14 +72,16 @@ impl Camera {
             self.pos += dt * self.up * self.movement_speed;
         }
 
-        self.angles.x -= input.mouse_delta().y * self.mouse_sensitivity * dt;
-        self.angles.y -= input.mouse_delta().x * self.mouse_sensitivity * dt;
+        if input.is_mouse_down(event::MouseButton::Right) {
+            self.angles.x -= input.mouse_delta().y * self.mouse_sensitivity * dt;
+            self.angles.y -= input.mouse_delta().x * self.mouse_sensitivity * dt;
 
-        self.angles.x = self.angles.x.clamp(-89.0, 89.0f32);
+            self.angles.x = self.angles.x.clamp(-89.0, 89.0f32);
 
-        if input.mouse_delta().norm_squared() > 0.0f32 {
-            (self.forward, self.right, self.up) =
-                Camera::get_camera_vectors(&self.world_up, &self.angles);
+            if input.mouse_delta().norm_squared() > 0.0f32 {
+                (self.forward, self.right, self.up) =
+                    Camera::get_camera_vectors(&self.world_up, &self.angles);
+            }
         }
     }
 

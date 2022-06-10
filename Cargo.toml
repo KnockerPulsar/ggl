@@ -42,6 +42,8 @@ glutin = "0.28.0" # examples/pure_glow
 egui_glow = { version = "0.18.0", git = "https://github.com/emilk/egui", features = ["winit"]  }
 image = "*"
 
+egui-gizmo = "0.7.0"
+
 
 # Native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

@@ -587,6 +587,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-gizmo"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d07a29dd97edce406989e954dc40aa14f88bbed3fb0c4c485e064c497d5eccec"
+dependencies = [
+ "egui 0.18.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "glam",
+]
+
+[[package]]
 name = "egui-winit"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -810,6 +820,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "egui 0.18.1 (git+https://github.com/emilk/egui)",
+ "egui-gizmo",
  "egui-winit 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "egui_glow",
  "glow",
@@ -843,6 +854,12 @@ dependencies = [
  "log",
  "xml-rs",
 ]
+
+[[package]]
+name = "glam"
+version = "0.20.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f43e957e744be03f5801a55472f593d43fabdebf25a4585db250f04d86b1675f"
 
 [[package]]
 name = "glob"

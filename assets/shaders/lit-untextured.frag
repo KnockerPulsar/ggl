@@ -152,7 +152,7 @@ vec3 computeSpotLight(SpotLight light, vec3 normal, vec3 frag_pos, vec3 view_dir
     // cos (15 deg) > cos(20 degsj)
     float intensity = smoothstep(light.cutoff_cos.y, light.cutoff_cos.x, theta);
 
-    ambient *= attenuation * intensity;
+    ambient *= attenuation ;
     diffuse *= attenuation * intensity;
     specular *= attenuation * intensity;
     
