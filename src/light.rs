@@ -1,9 +1,9 @@
 use std::format;
 use std::sync::Arc;
 
-use crate::component::Transform;
 use crate::egui_drawable::EguiDrawable;
 use crate::shader::ShaderProgram;
+use crate::Transform;
 
 use egui::Ui;
 use nalgebra_glm::*;
@@ -169,27 +169,20 @@ impl Light for SpotLight {
 
 impl EguiDrawable for LightColors {
     fn on_egui(&mut self, ui: &mut Ui) {
-        ui.horizontal(|ui| {
-            ui.label("Diffuse: ");
+        egui::Grid::new("Light colors")
+            .num_columns(3)
+            .start_row(0)
+            .show(ui, |ui| {
+                ui.label("Diffuse");
+                ui.label("Ambient");
+                ui.label("Specular");
+                ui.end_row();
 
-            ui.label("Ambient: ");
-
-            ui.label("Specular: ");
-        });
-
-        ui.horizontal(|ui| {
-            let mut float_vec: [f32; 3] = self.diffuse.try_into().expect("KAK");
-            ui.color_edit_button_rgb(&mut float_vec);
-            self.diffuse.copy_from_slice(&float_vec);
-
-            let mut float_vec: [f32; 3] = self.ambient.try_into().expect("KAK");
-            ui.color_edit_button_rgb(&mut float_vec);
-            self.ambient.copy_from_slice(&float_vec);
-
-            let mut float_vec: [f32; 3] = self.specular.try_into().expect("KAK");
-            ui.color_edit_button_rgb(&mut float_vec);
-            self.specular.copy_from_slice(&float_vec);
-        });
+                ui.color_edit_button_rgb(self.diffuse.as_mut().into());
+                ui.color_edit_button_rgb(self.ambient.as_mut().into());
+                ui.color_edit_button_rgb(self.specular.as_mut().into());
+                ui.end_row();
+            });
     }
 }
 
@@ -214,16 +207,18 @@ impl EguiDrawable for Vec2 {
 
 impl EguiDrawable for SpotLight {
     fn on_egui(&mut self, ui: &mut Ui) {
-        ui.add(egui::Checkbox::new(&mut self.enabled, "enabled"));
+        egui::CollapsingHeader::new("Spot light").show(ui, |ui| {
+            ui.add(egui::Checkbox::new(&mut self.enabled, "enabled"));
 
-        if self.enabled {
-            ui.add(egui::Label::new("Cuttoff cosines"));
-            self.cutoff_cosines.on_egui(ui);
+            if self.enabled {
+                ui.add(egui::Label::new("Cuttoff cosines"));
+                self.cutoff_cosines.on_egui(ui);
 
-            ui.add(egui::Label::new("Attenuation constants"));
-            self.attenuation_constants.on_egui(ui);
+                ui.add(egui::Label::new("Attenuation constants"));
+                self.attenuation_constants.on_egui(ui);
 
-            self.colors.on_egui(ui);
-        }
+                self.colors.on_egui(ui);
+            }
+        });
     }
 }

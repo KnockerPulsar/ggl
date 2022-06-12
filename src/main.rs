@@ -11,49 +11,47 @@ use std::env;
 use std::mem::size_of;
 
 mod camera;
-mod component;
 mod egui_drawable;
-mod entity;
 mod input;
 mod light;
+mod scene;
 mod shader;
 mod texture;
+mod transform;
 
 use camera::Camera;
-use entity::Scene;
+use egui_drawable::EguiDrawable;
 use glow::*;
 use input::InputSystem;
+use scene::Scene;
 use texture::Texture2D;
-
-use component::Transform;
-
-use crate::egui_drawable::EguiDrawable;
+use transform::Transform;
 
 fn ecs_test_scene() -> Scene {
     let mut s = Scene::new();
 
-    let light_pos = glm::vec3(3.0, 0.0, 0.0);
-
     let e1 = s.add_entity();
-    let mut spot0 = SpotLight {
-        enabled: true,
-        colors: LightColors {
-            ambient: glm::vec3(0.1f32, 0.0, 0.0),
-            diffuse: glm::vec3(10.0, 0.0, 0.0),
-            specular: glm::vec3(0.0, 10.0, 10.0),
-        },
-        attenuation_constants: glm::vec3(1.0, 0.0, 1.0),
-        cutoff_cosines: glm::vec2(2.5f32.to_radians().cos(), 5f32.to_radians().cos()),
-    };
-
     s.add_comp_to_entity(
         e1,
-        Transform::from_pos_rot(
+        Transform::new(
             glm::vec3(3.0, 0.0, 0.0),
             glm::vec3(0.0, 0.0, -90.0f32.to_radians()),
+            "Light 1",
         ),
+    )
+    .add_comp_to_entity(
+        e1,
+        SpotLight {
+            enabled: true,
+            colors: LightColors {
+                ambient: glm::vec3(0.1f32, 0.0, 0.0),
+                diffuse: glm::vec3(10.0, 0.0, 0.0),
+                specular: glm::vec3(0.0, 10.0, 10.0),
+            },
+            attenuation_constants: glm::vec3(1.0, 0.0, 1.0),
+            cutoff_cosines: glm::vec2(2.5f32.to_radians().cos(), 5f32.to_radians().cos()),
+        },
     );
-    s.add_comp_to_entity(e1, spot0);
 
     s
 }
@@ -209,48 +207,6 @@ fn main() {
     light_model_mat = glm::scale(&light_model_mat, &glm::vec3(0.05, 0.05, 0.05));
     let mut scene = ecs_test_scene();
 
-    // let mut spot0 = SpotLight {
-    //     enabled: true,
-    //     colors: LightColors {
-    //         ambient: glm::vec3(0.1f32, 0.0, 0.0),
-    //         diffuse: glm::vec3(10.0, 0.0, 0.0),
-    //         specular: glm::vec3(0.0, 10.0, 10.0),
-    //     },
-    //     attenuation_constants: glm::vec3(1.0, 0.0, 1.0),
-    //     cutoff_cosines: glm::vec2(2.5f32.to_radians().cos(), 5f32.to_radians().cos()),
-    // };
-
-    // let mut spot1 = SpotLight {
-    //     enabled: true,
-    //     colors: LightColors {
-    //         ambient: glm::vec3(0.0, 0.0, 0.1f32),
-    //         diffuse: glm::vec3(0.0, 1.0, 0.0f32),
-    //         specular: glm::vec3(1.0, 0.0, 0.0),
-    //     },
-    //     attenuation_constants: glm::vec3(0.1, 0.0, 1.0),
-    //     cutoff_cosines: glm::vec2(4f32.to_radians().cos(), 10f32.to_radians().cos()),
-    // };
-
-    // let point1 = PointLight {
-    //     enabled: false,
-    //     colors: LightColors {
-    //         ambient: glm::vec3(0.1, 0.9, 0.1),
-    //         diffuse: glm::vec3(2.0, 0.0, 0.0),
-    //         specular: glm::vec3(0.0, 1.0, 1.0),
-    //     },
-    //     attenuation_constants: glm::vec3(0.2, 0.0, 1.0),
-    // };
-
-    // let point2 = PointLight {
-    //     enabled: false,
-    //     colors: LightColors {
-    //         ambient: glm::vec3(0.0, 0.0, 0.1),
-    //         diffuse: glm::vec3(0.0, 0.0, 0.9),
-    //         specular: glm::vec3(0.0, 1.0, 0.0),
-    //     },
-    //     attenuation_constants: glm::vec3(0.1, 0.0, 1.0),
-    // };
-
     unsafe {
         event_loop.run(
             move |event, _, control_flow: &mut glutin::event_loop::ControlFlow| {
@@ -291,11 +247,12 @@ fn main() {
                         lit_shader.set_float(&gl_arc, "u_material.shininess", 32.0);
 
                         if let (Some(mut spot_lights), Some(mut transforms)) = (
-                            scene.borrow_comp_vecs::<SpotLight>(),
-                            scene.borrow_comp_vecs::<Transform>(),
+                            scene.borrow_comp_vec::<SpotLight>(),
+                            scene.borrow_comp_vec::<Transform>(),
                         ) {
                             let enabled_count = spot_lights
                                 .iter()
+                                // Filter out None lights or disabled lights
                                 .filter(|l| {
                                     if let Some(light) = *l {
                                         light.is_enabled()
@@ -307,94 +264,33 @@ fn main() {
 
                             lit_shader.set_int(&gl_arc, "u_num_spot_lights", enabled_count);
 
-                            egui_glow.run(window.window(), |egui_ctx| {
-                                let zip = spot_lights.iter_mut().zip(transforms.iter_mut());
-                                let iter = zip.filter_map(|(health, name)| {
-                                    Some((health.as_mut()?, name.as_mut()?))
-                                });
+                            let zip = spot_lights.iter_mut().zip(transforms.iter_mut());
 
-                                egui::Window::new("spot_lights").show(egui_ctx, |ui| {
-                                    for (i, (light, transform)) in iter.enumerate() {
-                                        transform.on_egui(ui);
-                                        light.on_egui(ui);
+                            let mut enabled_light_index = 0;
 
-                                        light.upload_data(
-                                            &gl_arc,
-                                            &transform,
-                                            &format!("u_spot_lights[{}]", i),
-                                            &lit_shader,
-                                        );
-                                    }
-                                });
-                            });
+                            // Loop over all light and transform components
+                            // Note that some entities might have one or none. In this case light/transform
+                            // Will be None
+                            for (light, transform) in zip {
+                                // If an entity has both, draw egui and upload its data
+                                if let (Some(l), Some(t)) = (light, transform) {
+                                    l.upload_data(
+                                        &gl_arc,
+                                        &t,
+                                        &format!("u_spot_lights[{}]", enabled_light_index),
+                                        &lit_shader,
+                                    );
+
+                                    enabled_light_index += 1;
+                                }
+                            }
                         }
 
-                        // let dir_light = DirectionalLight {
-                        //     enabled: false,
-                        //     colors: LightColors {
-                        //         ambient: glm::vec3(0.5, 0.5, 0.1),
-                        //         diffuse: glm::vec3(0.9, 0.9, 0.2),
-                        //         specular: glm::vec3(1.0, 1.0, 1.0),
-                        //     },
-                        // };
-
-                        // if dir_light.is_enabled() {
-                        //     dir_light.upload_data(&gl_arc, "u_directional_light", &lit_shader);
-                        // }
-
-                        // {
-                        //     let point_lights = vec![&point1, &point2];
-
-                        //     lit_shader.set_int(
-                        //         &gl_arc,
-                        //         "u_num_point_lights",
-                        //         point_lights
-                        //             .iter()
-                        //             .filter(|light| light.is_enabled())
-                        //             .count() as i32, // ! Count only enabled lights
-                        //     );
-
-                        //     let mut curr_point = 0;
-                        //     for light in point_lights.iter() {
-                        //         if light.is_enabled() {
-                        //             light.upload_data(
-                        //                 &gl_arc,
-                        //                 &format!("u_point_lights[{}]", curr_point),
-                        //                 &lit_shader,
-                        //             );
-                        //             curr_point += 1;
-                        //         }
-                        //     }
-                        // }
-
-                        // egui_glow.run(window.window(), |egui_ctx| {
-                        //     egui::Window::new("Spot0").show(egui_ctx, |ui| {
-                        //         spot0.on_egui(ui);
-                        //     });
-                        // });
-
-                        // let spot_lights = vec![&spot0, &spot1];
-
-                        // lit_shader.set_int(
-                        //     &gl_arc,
-                        //     "u_num_spot_lights",
-                        //     spot_lights
-                        //         .iter()
-                        //         .filter(|light| light.is_enabled())
-                        //         .count() as i32, // ! Count only enabled lights
-                        // );
-
-                        // let mut curr_spot = 0;
-                        // for light in spot_lights.iter() {
-                        //     if light.is_enabled() {
-                        //         light.upload_data(
-                        //             &gl_arc,
-                        //             &format!("u_spot_lights[{}]", curr_spot),
-                        //             &lit_shader,
-                        //         );
-                        //         curr_spot += 1;
-                        //     }
-                        // }
+                        egui_glow.run(window.window(), |egui_ctx| {
+                            egui::Window::new("spot_lights").show(egui_ctx, |ui| {
+                                scene.on_egui(ui);
+                            });
+                        });
 
                         lit_shader.set_mat4(&gl_arc, "projection", projection);
                         lit_shader.set_mat4(&gl_arc, "view", view);
