@@ -31,7 +31,6 @@ pub struct LightColors {
 
 pub struct DirectionalLight {
     pub enabled: bool,
-
     pub colors: LightColors,
 }
 
@@ -43,7 +42,7 @@ pub struct PointLight {
 
 pub struct SpotLight {
     pub enabled: bool,
-    pub cutoff_cosines: Vec2, // ! ANGLES IN RADIANS
+    pub cutoff_angles: Vec2, // Angles in degress, converted to cos(rad(angle)) on upload
 
     pub colors: LightColors,
     pub attenuation_constants: Vec3,
@@ -158,7 +157,7 @@ impl Light for SpotLight {
         shader.set_vec2(
             &gl,
             &format!("{}.cutoff_cos", uniform_name),
-            self.cutoff_cosines,
+            glm::cos(&glm::radians(&self.cutoff_angles)),
         );
     }
 
@@ -168,7 +167,7 @@ impl Light for SpotLight {
 }
 
 impl EguiDrawable for LightColors {
-    fn on_egui(&mut self, ui: &mut Ui) {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
         egui::Grid::new("Light colors")
             .num_columns(3)
             .start_row(0)
@@ -187,7 +186,7 @@ impl EguiDrawable for LightColors {
 }
 
 impl EguiDrawable for Vec3 {
-    fn on_egui(&mut self, ui: &mut Ui) {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
         ui.horizontal(|ui| {
             ui.add(egui::DragValue::new(&mut self.x).speed(0.01));
             ui.add(egui::DragValue::new(&mut self.y).speed(0.01));
@@ -197,7 +196,7 @@ impl EguiDrawable for Vec3 {
 }
 
 impl EguiDrawable for Vec2 {
-    fn on_egui(&mut self, ui: &mut Ui) {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
         ui.horizontal(|ui| {
             ui.add(egui::DragValue::new(&mut self.x).speed(0.01));
             ui.add(egui::DragValue::new(&mut self.y).speed(0.01));
@@ -206,18 +205,45 @@ impl EguiDrawable for Vec2 {
 }
 
 impl EguiDrawable for SpotLight {
-    fn on_egui(&mut self, ui: &mut Ui) {
-        egui::CollapsingHeader::new("Spot light").show(ui, |ui| {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
+        egui::CollapsingHeader::new(format!("Spotlight {}", index)).show(ui, |ui| {
             ui.add(egui::Checkbox::new(&mut self.enabled, "enabled"));
 
             if self.enabled {
                 ui.add(egui::Label::new("Cuttoff cosines"));
-                self.cutoff_cosines.on_egui(ui);
+                self.cutoff_angles.on_egui(ui, index);
 
                 ui.add(egui::Label::new("Attenuation constants"));
-                self.attenuation_constants.on_egui(ui);
+                self.attenuation_constants.on_egui(ui, index);
 
-                self.colors.on_egui(ui);
+                self.colors.on_egui(ui, index);
+            }
+        });
+    }
+}
+
+impl EguiDrawable for PointLight {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
+        egui::CollapsingHeader::new(format!("Point light {}", index)).show(ui, |ui| {
+            ui.add(egui::Checkbox::new(&mut self.enabled, "enabled"));
+
+            if self.enabled {
+                ui.add(egui::Label::new("Attenuation constants"));
+                self.attenuation_constants.on_egui(ui, index);
+
+                self.colors.on_egui(ui, index);
+            }
+        });
+    }
+}
+
+impl EguiDrawable for DirectionalLight {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
+        egui::CollapsingHeader::new(format!("Directional Light {}", index)).show(ui, |ui| {
+            ui.add(egui::Checkbox::new(&mut self.enabled, "enabled"));
+
+            if self.enabled {
+                self.colors.on_egui(ui, index);
             }
         });
     }

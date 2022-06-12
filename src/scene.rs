@@ -1,9 +1,14 @@
 use std::cell::{RefCell, RefMut};
 
-use egui::Ui;
+use egui::{RawInput, Ui};
+use egui_glow::EguiGlow;
+use glutin::{window::Window, ContextWrapper, PossiblyCurrent};
 
-use crate::egui_drawable::EguiDrawable;
-
+use crate::{
+    egui_drawable::EguiDrawable,
+    light::{DirectionalLight, LightColors, PointLight, SpotLight},
+    transform::Transform,
+};
 
 pub trait ComponentVec {
     fn as_any(&self) -> &dyn std::any::Any;
@@ -33,7 +38,7 @@ impl<T: 'static + EguiDrawable> ComponentVec for RefCell<Vec<Option<T>>> {
             .unwrap()
             .get_mut()[entity_id]
         {
-            comp.on_egui(ui);
+            comp.on_egui(ui, entity_id);
         }
     }
 }
@@ -107,17 +112,141 @@ impl Scene {
 
         None
     }
-}
 
-impl EguiDrawable for Scene {
-    fn on_egui(&mut self, ui: &mut egui::Ui) {
-        for i in 0..self.entity_count {
-            ui.group(|ui| {
-                for comp_vec in &mut self.component_vecs {
-                    comp_vec.draw_egui(ui, i);
+    pub fn entities_egui(
+        &mut self,
+        egui_glow: &mut EguiGlow,
+        window: &ContextWrapper<PossiblyCurrent, Window>,
+    ) {
+        egui_glow.run(window.window(), |egui_ctx| {
+            egui::Window::new("Entities").show(egui_ctx, |ui| {
+                for i in 0..self.entity_count {
+                    ui.group(|ui| {
+                        for comp_vec in &mut self.component_vecs {
+                            comp_vec.draw_egui(ui, i);
+                        }
+                    });
                 }
             });
-            ui.separator();
-        }
+        });
+    }
+}
+
+impl Scene {
+    pub fn light_test() -> Self {
+        let mut s = Scene::new();
+
+        let spot0 = s.add_entity();
+        s.add_comp_to_entity(
+            spot0,
+            Transform::new(
+                glm::vec3(3.0, 0.0, 0.0),
+                glm::vec3(0.0, 0.0, -90.0),
+                "Spotlight 0",
+            ),
+        )
+        .add_comp_to_entity(
+            spot0,
+            SpotLight {
+                enabled: true,
+                colors: LightColors {
+                    ambient: glm::vec3(0.1f32, 0.0, 0.0),
+                    diffuse: glm::vec3(10.0, 0.0, 0.0),
+                    specular: glm::vec3(0.0, 10.0, 10.0),
+                },
+                attenuation_constants: glm::vec3(1.0, 0.0, 1.0),
+                cutoff_angles: glm::vec2(2.5f32, 5f32),
+            },
+        );
+
+        let spot1 = s.add_entity();
+        s.add_comp_to_entity(
+            spot1,
+            Transform::new(
+                glm::vec3(-3.0, -2.0, -2.0),
+                glm::vec3(0.0, -31.0, 115.0),
+                "Spotlight 1",
+            ),
+        )
+        .add_comp_to_entity(
+            spot1,
+            SpotLight {
+                enabled: true,
+                colors: LightColors {
+                    ambient: glm::vec3(0.0, 0.0, 0.1f32),
+                    diffuse: glm::vec3(0.0, 1.0, 0.0f32),
+                    specular: glm::vec3(1.0, 0.0, 0.0),
+                },
+                attenuation_constants: glm::vec3(0.1, 0.0, 1.0),
+                cutoff_angles: glm::vec2(4.0, 10.0),
+            },
+        );
+
+        let point0 = s.add_entity();
+        s.add_comp_to_entity(
+            point0,
+            Transform::new(
+                glm::vec3(0.0, 2.0, 0.0),
+                glm::Vec3::zeros(),
+                "Point light 0",
+            ),
+        )
+        .add_comp_to_entity(
+            point0,
+            PointLight {
+                enabled: true,
+                colors: LightColors {
+                    ambient: glm::vec3(0.1, 0.03, 0.1),
+                    diffuse: glm::vec3(0.7, 0.1, 0.7),
+                    specular: glm::vec3(0.5, 0.0, 0.0),
+                },
+                attenuation_constants: glm::vec3(0.2, 0.0, 0.5),
+            },
+        );
+
+        let point1 = s.add_entity();
+        s.add_comp_to_entity(
+            point1,
+            Transform::new(
+                glm::vec3(0.0, -2.0, 0.0),
+                glm::Vec3::zeros(),
+                "Point light 1",
+            ),
+        )
+        .add_comp_to_entity(
+            point1,
+            PointLight {
+                enabled: true,
+                colors: LightColors {
+                    ambient: glm::vec3(0.0, 0.0, 0.1),
+                    diffuse: glm::vec3(0.0, 0.0, 0.9),
+                    specular: glm::vec3(0.0, 1.0, 0.0),
+                },
+                attenuation_constants: glm::vec3(0.1, 0.0, 1.0),
+            },
+        );
+
+        let point1 = s.add_entity();
+        s.add_comp_to_entity(
+            point1,
+            Transform::new(
+                glm::vec3(0.0, 0.0, 0.0),
+                glm::Vec3::zeros(),
+                "Directional Light",
+            ),
+        )
+        .add_comp_to_entity(
+            point1,
+            DirectionalLight {
+                enabled: true,
+                colors: LightColors {
+                    ambient: glm::vec3(0.0, 0.0, 0.1),
+                    diffuse: glm::vec3(0.0, 0.0, 0.9),
+                    specular: glm::vec3(0.0, 1.0, 0.0),
+                },
+            },
+        );
+
+        s
     }
 }

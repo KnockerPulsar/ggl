@@ -1,4 +1,5 @@
 use crate::egui_drawable::EguiDrawable;
+use egui::Ui;
 use glm::Vec3;
 use nalgebra_glm as glm;
 
@@ -7,6 +8,7 @@ pub struct Transform {
     pos: Vec3,
     rot: Vec3,
     name: String,
+
     model: glm::Mat4,
 }
 
@@ -45,7 +47,7 @@ impl Transform {
     }
 
     pub fn get_model_matrix(&self) -> glm::Mat4 {
-        return Transform::model_matrix(self.pos, self.rot);
+        return Transform::model_matrix(self.pos, glm::radians(&self.rot));
     }
 
     pub fn model_matrix(pos: Vec3, rot: Vec3) -> glm::Mat4 {
@@ -64,11 +66,10 @@ impl Transform {
 }
 
 impl EguiDrawable for Transform {
-    fn on_egui(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("Transform").show(ui, |ui| {
-            ui.label(format!("Name: {}", &self.name));
-            self.pos.on_egui(ui);
-            self.rot.on_egui(ui);
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
+        egui::CollapsingHeader::new(format!("Transform - {}", &self.name)).show(ui, |ui| {
+            self.pos.on_egui(ui, index);
+            self.rot.on_egui(ui, index);
         });
     }
 }

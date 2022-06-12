@@ -7,6 +7,8 @@ extern crate nalgebra_glm as glm;
 
 use glutin::event::WindowEvent;
 use light::*;
+use shader::ShaderProgram;
+use std::cell::RefMut;
 use std::env;
 use std::mem::size_of;
 
@@ -27,33 +29,94 @@ use scene::Scene;
 use texture::Texture2D;
 use transform::Transform;
 
-fn ecs_test_scene() -> Scene {
-    let mut s = Scene::new();
+fn light_subsystem<T: Light>(
+    gl_arc: &std::sync::Arc<Context>,
+    lit_shader: &mut ShaderProgram,
+    transforms: &mut RefMut<Vec<Option<Transform>>>,
+    spot_lights: &mut RefMut<Vec<Option<T>>>,
+    u_name_light_num: &str,
+    u_light_array: &str,
+) {
+    let enabled_count = spot_lights
+        .iter()
+        // Filter out None lights or disabled lights
+        .filter(|l| {
+            if let Some(light) = *l {
+                light.is_enabled()
+            } else {
+                false
+            }
+        })
+        .count() as i32;
 
-    let e1 = s.add_entity();
-    s.add_comp_to_entity(
-        e1,
-        Transform::new(
-            glm::vec3(3.0, 0.0, 0.0),
-            glm::vec3(0.0, 0.0, -90.0f32.to_radians()),
-            "Light 1",
-        ),
-    )
-    .add_comp_to_entity(
-        e1,
-        SpotLight {
-            enabled: true,
-            colors: LightColors {
-                ambient: glm::vec3(0.1f32, 0.0, 0.0),
-                diffuse: glm::vec3(10.0, 0.0, 0.0),
-                specular: glm::vec3(0.0, 10.0, 10.0),
-            },
-            attenuation_constants: glm::vec3(1.0, 0.0, 1.0),
-            cutoff_cosines: glm::vec2(2.5f32.to_radians().cos(), 5f32.to_radians().cos()),
-        },
-    );
+    lit_shader.set_int(&gl_arc, u_name_light_num, enabled_count);
 
-    s
+    let zip = spot_lights.iter_mut().zip(transforms.iter_mut());
+    let mut enabled_light_index = 0;
+
+    // Loop over all light and transform components
+    // Note that some entities might have one or none. In this case light/transform
+    // Will be None
+    for (light, transform) in zip {
+        // If an entity has both, draw egui and upload its data
+        if let (Some(l), Some(t)) = (light, transform) {
+            l.upload_data(
+                &gl_arc,
+                &t,
+                &format!("{}[{}]", u_light_array, enabled_light_index),
+                &lit_shader,
+            );
+
+            enabled_light_index += 1;
+        }
+    }
+}
+
+fn light_system(
+    gl_arc: &std::sync::Arc<Context>,
+    scene: &mut Scene,
+    lit_shader: &mut ShaderProgram,
+) {
+    if let Some(mut transforms) = scene.borrow_comp_vec::<Transform>() {
+        if let Some(mut spot_lights) = scene.borrow_comp_vec::<SpotLight>() {
+            light_subsystem::<SpotLight>(
+                &gl_arc,
+                lit_shader,
+                &mut transforms,
+                &mut spot_lights,
+                "u_num_spot_lights",
+                "u_spot_lights",
+            );
+        }
+
+        if let Some(mut point_lights) = scene.borrow_comp_vec::<PointLight>() {
+            light_subsystem::<PointLight>(
+                &gl_arc,
+                lit_shader,
+                &mut transforms,
+                &mut point_lights,
+                "u_num_point_lights",
+                "u_point_lights",
+            );
+        }
+
+        if let Some(mut directional_lights) = scene.borrow_comp_vec::<DirectionalLight>() {
+            let zip = directional_lights.iter_mut().zip(transforms.iter_mut());
+
+            // Loop over all light and transform components
+            // Note that some entities might have one or none. In this case light/transform
+            // Will be None
+            for (light, transform) in zip {
+                // If an entity has both, draw egui and upload its data
+                if let (Some(l), Some(t)) = (light, transform) {
+                    if l.is_enabled() {
+                        l.upload_data(&gl_arc, &t, "u_directional_light", &lit_shader);
+                        break;
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn main() {
@@ -80,7 +143,7 @@ fn main() {
         }
     };
 
-    let gl_arc = std::sync::Arc::new(gl);
+    let mut gl_arc = std::sync::Arc::new(gl);
     let mut egui_glow = egui_glow::EguiGlow::new(&event_loop, gl_arc.clone());
 
     unsafe {
@@ -123,7 +186,7 @@ fn main() {
     let container_spec = Texture2D::load(&gl_arc, "assets/textures/container2_specular.png");
     let container_emissive = Texture2D::load(&gl_arc, "assets/textures/container2_emissive.png");
 
-    let lit_shader = shader::ShaderProgram::new(
+    let mut lit_shader = shader::ShaderProgram::new(
         &gl_arc,
         "assets/shaders/lit-untextured.vert",
         "assets/shaders/lit-untextured.frag",
@@ -205,7 +268,7 @@ fn main() {
     let light_pos = glm::vec3(3.0, 0.0, 0.0);
     let mut light_model_mat = glm::translation(&light_pos);
     light_model_mat = glm::scale(&light_model_mat, &glm::vec3(0.05, 0.05, 0.05));
-    let mut scene = ecs_test_scene();
+    let mut scene = Scene::light_test();
 
     unsafe {
         event_loop.run(
@@ -246,51 +309,9 @@ fn main() {
 
                         lit_shader.set_float(&gl_arc, "u_material.shininess", 32.0);
 
-                        if let (Some(mut spot_lights), Some(mut transforms)) = (
-                            scene.borrow_comp_vec::<SpotLight>(),
-                            scene.borrow_comp_vec::<Transform>(),
-                        ) {
-                            let enabled_count = spot_lights
-                                .iter()
-                                // Filter out None lights or disabled lights
-                                .filter(|l| {
-                                    if let Some(light) = *l {
-                                        light.is_enabled()
-                                    } else {
-                                        false
-                                    }
-                                })
-                                .count() as i32;
+                        light_system(&mut gl_arc, &mut scene, &mut lit_shader);
 
-                            lit_shader.set_int(&gl_arc, "u_num_spot_lights", enabled_count);
-
-                            let zip = spot_lights.iter_mut().zip(transforms.iter_mut());
-
-                            let mut enabled_light_index = 0;
-
-                            // Loop over all light and transform components
-                            // Note that some entities might have one or none. In this case light/transform
-                            // Will be None
-                            for (light, transform) in zip {
-                                // If an entity has both, draw egui and upload its data
-                                if let (Some(l), Some(t)) = (light, transform) {
-                                    l.upload_data(
-                                        &gl_arc,
-                                        &t,
-                                        &format!("u_spot_lights[{}]", enabled_light_index),
-                                        &lit_shader,
-                                    );
-
-                                    enabled_light_index += 1;
-                                }
-                            }
-                        }
-
-                        egui_glow.run(window.window(), |egui_ctx| {
-                            egui::Window::new("spot_lights").show(egui_ctx, |ui| {
-                                scene.on_egui(ui);
-                            });
-                        });
+                        scene.entities_egui(&mut egui_glow, &window);
 
                         lit_shader.set_mat4(&gl_arc, "projection", projection);
                         lit_shader.set_mat4(&gl_arc, "view", view);
