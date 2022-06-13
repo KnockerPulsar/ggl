@@ -30,7 +30,7 @@ winit = ["egui-winit",]
 
 
 [dependencies]
-egui = { version = "0.18.0", git = "https://github.com/emilk/egui", default-features = true }
+egui = { version = "0.18.1", default-features = true }
 
 bytemuck = "1.7"
 glow = "0.11"
@@ -39,7 +39,7 @@ tracing = "0.1"
 nalgebra-glm  = "*"
 
 glutin = "0.28.0" # examples/pure_glow
-egui_glow = { version = "0.18.0", git = "https://github.com/emilk/egui", features = ["winit"]  }
+egui_glow = { version = "0.18.1", features = ["winit"]  }
 image = "*"
 
 egui-gizmo = "0.7.0"

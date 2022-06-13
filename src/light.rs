@@ -1,5 +1,5 @@
 use std::format;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use crate::egui_drawable::EguiDrawable;
 use crate::shader::ShaderProgram;
@@ -11,7 +11,7 @@ use nalgebra_glm::*;
 pub trait Light {
     fn upload_data(
         &self,
-        gl: &Arc<glow::Context>, // OpenGL context
+        gl: &Rc<glow::Context>, // OpenGL context
         transform: &Transform,
 
         //* String containing uniform name into light array
@@ -51,7 +51,7 @@ pub struct SpotLight {
 impl Light for DirectionalLight {
     fn upload_data(
         &self,
-        gl: &Arc<glow::Context>, // OpenGL context
+        gl: &Rc<glow::Context>, // OpenGL context
         transform: &Transform,
 
         uniform_name: &str,
@@ -85,7 +85,7 @@ impl Light for DirectionalLight {
 impl Light for PointLight {
     fn upload_data(
         &self,
-        gl: &Arc<glow::Context>,
+        gl: &Rc<glow::Context>,
         transform: &Transform,
         uniform_name: &str,
         shader: &ShaderProgram,
@@ -123,7 +123,7 @@ impl Light for PointLight {
 impl Light for SpotLight {
     fn upload_data(
         &self,
-        gl: &Arc<glow::Context>, // OpenGL context
+        gl: &Rc<glow::Context>, // OpenGL context
         transform: &Transform,
 
         uniform_name: &str,
@@ -167,7 +167,7 @@ impl Light for SpotLight {
 }
 
 impl EguiDrawable for LightColors {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
         egui::Grid::new("Light colors")
             .num_columns(3)
             .start_row(0)
@@ -182,35 +182,53 @@ impl EguiDrawable for LightColors {
                 ui.color_edit_button_rgb(self.specular.as_mut().into());
                 ui.end_row();
             });
+
+        false
     }
 }
 
 impl EguiDrawable for Vec3 {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
+        let mut fields_changed = false;
         ui.horizontal(|ui| {
-            ui.add(egui::DragValue::new(&mut self.x).speed(0.01));
-            ui.add(egui::DragValue::new(&mut self.y).speed(0.01));
-            ui.add(egui::DragValue::new(&mut self.z).speed(0.01));
+            fields_changed |= ui
+                .add(egui::DragValue::new(&mut self.x).speed(0.01))
+                .changed();
+            fields_changed |= ui
+                .add(egui::DragValue::new(&mut self.y).speed(0.01))
+                .changed();
+            fields_changed |= ui
+                .add(egui::DragValue::new(&mut self.z).speed(0.01))
+                .changed();
         });
+
+        fields_changed
     }
 }
 
 impl EguiDrawable for Vec2 {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
+        let mut fields_changed = false;
+
         ui.horizontal(|ui| {
-            ui.add(egui::DragValue::new(&mut self.x).speed(0.01));
-            ui.add(egui::DragValue::new(&mut self.y).speed(0.01));
+            fields_changed |= ui
+                .add(egui::DragValue::new(&mut self.x).speed(0.01))
+                .changed();
+            fields_changed |= ui
+                .add(egui::DragValue::new(&mut self.y).speed(0.01))
+                .changed();
         });
+        fields_changed
     }
 }
 
 impl EguiDrawable for SpotLight {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
         egui::CollapsingHeader::new(format!("Spotlight {}", index)).show(ui, |ui| {
             ui.add(egui::Checkbox::new(&mut self.enabled, "enabled"));
 
             if self.enabled {
-                ui.add(egui::Label::new("Cuttoff cosines"));
+                ui.add(egui::Label::new("Cuttoff angles"));
                 self.cutoff_angles.on_egui(ui, index);
 
                 ui.add(egui::Label::new("Attenuation constants"));
@@ -219,11 +237,12 @@ impl EguiDrawable for SpotLight {
                 self.colors.on_egui(ui, index);
             }
         });
+        false
     }
 }
 
 impl EguiDrawable for PointLight {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
         egui::CollapsingHeader::new(format!("Point light {}", index)).show(ui, |ui| {
             ui.add(egui::Checkbox::new(&mut self.enabled, "enabled"));
 
@@ -234,11 +253,12 @@ impl EguiDrawable for PointLight {
                 self.colors.on_egui(ui, index);
             }
         });
+        false
     }
 }
 
 impl EguiDrawable for DirectionalLight {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
         egui::CollapsingHeader::new(format!("Directional Light {}", index)).show(ui, |ui| {
             ui.add(egui::Checkbox::new(&mut self.enabled, "enabled"));
 
@@ -246,5 +266,7 @@ impl EguiDrawable for DirectionalLight {
                 self.colors.on_egui(ui, index);
             }
         });
+
+        false
     }
 }

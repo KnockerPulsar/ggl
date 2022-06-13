@@ -30,7 +30,7 @@ use texture::Texture2D;
 use transform::Transform;
 
 fn light_subsystem<T: Light>(
-    gl_arc: &std::sync::Arc<Context>,
+    gl_arc: &std::rc::Rc<Context>,
     lit_shader: &mut ShaderProgram,
     transforms: &mut RefMut<Vec<Option<Transform>>>,
     spot_lights: &mut RefMut<Vec<Option<T>>>,
@@ -72,11 +72,7 @@ fn light_subsystem<T: Light>(
     }
 }
 
-fn light_system(
-    gl_arc: &std::sync::Arc<Context>,
-    scene: &mut Scene,
-    lit_shader: &mut ShaderProgram,
-) {
+fn light_system(gl_arc: &std::rc::Rc<Context>, scene: &mut Scene, lit_shader: &mut ShaderProgram) {
     if let Some(mut transforms) = scene.borrow_comp_vec::<Transform>() {
         if let Some(mut spot_lights) = scene.borrow_comp_vec::<SpotLight>() {
             light_subsystem::<SpotLight>(
@@ -143,11 +139,11 @@ fn main() {
         }
     };
 
-    let mut gl_arc = std::sync::Arc::new(gl);
-    let mut egui_glow = egui_glow::EguiGlow::new(&event_loop, gl_arc.clone());
+    let mut gl_rc = std::rc::Rc::new(gl);
+    let mut egui_glow = egui_glow::EguiGlow::new(&window.window(), gl_rc.clone());
 
     unsafe {
-        gl_arc.viewport(0, 0, window_width, window_height);
+        gl_rc.viewport(0, 0, window_width, window_height);
     }
 
     // 3 floats for vertex position
@@ -182,18 +178,18 @@ fn main() {
             .unwrap()
     );
 
-    let container_diff = Texture2D::load(&gl_arc, "assets/textures/container2.png");
-    let container_spec = Texture2D::load(&gl_arc, "assets/textures/container2_specular.png");
-    let container_emissive = Texture2D::load(&gl_arc, "assets/textures/container2_emissive.png");
+    let container_diff = Texture2D::load(&gl_rc, "assets/textures/container2.png");
+    let container_spec = Texture2D::load(&gl_rc, "assets/textures/container2_specular.png");
+    let container_emissive = Texture2D::load(&gl_rc, "assets/textures/container2_emissive.png");
 
     let mut lit_shader = shader::ShaderProgram::new(
-        &gl_arc,
+        &gl_rc,
         "assets/shaders/lit-untextured.vert",
         "assets/shaders/lit-untextured.frag",
     );
 
     let light_shader = shader::ShaderProgram::new(
-        &gl_arc,
+        &gl_rc,
         "assets/shaders/lit-untextured.vert",
         "assets/shaders/light.frag",
     );
@@ -203,23 +199,23 @@ fn main() {
     let light_vao: glow::VertexArray;
     unsafe {
         // Lit object setup
-        lit_shader.use_program(&gl_arc);
+        lit_shader.use_program(&gl_rc);
 
-        lit_vao = gl_arc.create_vertex_array().unwrap();
-        gl_arc.bind_vertex_array(Some(lit_vao));
+        lit_vao = gl_rc.create_vertex_array().unwrap();
+        gl_rc.bind_vertex_array(Some(lit_vao));
 
-        cube_vbo = gl_arc.create_buffer().unwrap();
-        gl_arc.bind_buffer(glow::ARRAY_BUFFER, Some(cube_vbo));
-        gl_arc.buffer_data_u8_slice(
+        cube_vbo = gl_rc.create_buffer().unwrap();
+        gl_rc.bind_buffer(glow::ARRAY_BUFFER, Some(cube_vbo));
+        gl_rc.buffer_data_u8_slice(
             glow::ARRAY_BUFFER,
             std::slice::from_raw_parts(verts.as_ptr() as *const u8, size_of::<f32>() * verts.len()),
             glow::STATIC_DRAW,
         );
 
-        gl_arc.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 8 * size_of::<f32>() as i32, 0);
-        gl_arc.enable_vertex_attrib_array(0);
+        gl_rc.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 8 * size_of::<f32>() as i32, 0);
+        gl_rc.enable_vertex_attrib_array(0);
 
-        gl_arc.vertex_attrib_pointer_f32(
+        gl_rc.vertex_attrib_pointer_f32(
             1,
             3,
             glow::FLOAT,
@@ -227,9 +223,9 @@ fn main() {
             8 * size_of::<f32>() as i32,
             3 * size_of::<f32>() as i32,
         );
-        gl_arc.enable_vertex_attrib_array(1);
+        gl_rc.enable_vertex_attrib_array(1);
 
-        gl_arc.vertex_attrib_pointer_f32(
+        gl_rc.vertex_attrib_pointer_f32(
             2,
             2,
             glow::FLOAT,
@@ -237,30 +233,25 @@ fn main() {
             8 * size_of::<f32>() as i32,
             6 * size_of::<f32>() as i32,
         );
-        gl_arc.enable_vertex_attrib_array(2);
+        gl_rc.enable_vertex_attrib_array(2);
 
-        light_shader.use_program(&gl_arc);
+        light_shader.use_program(&gl_rc);
 
         // Light setup
 
-        light_vao = gl_arc.create_vertex_array().unwrap();
-        gl_arc.bind_vertex_array(Some(light_vao));
-        gl_arc.bind_buffer(glow::ARRAY_BUFFER, Some(cube_vbo));
+        light_vao = gl_rc.create_vertex_array().unwrap();
+        gl_rc.bind_vertex_array(Some(light_vao));
+        gl_rc.bind_buffer(glow::ARRAY_BUFFER, Some(cube_vbo));
 
-        gl_arc.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 8 * size_of::<f32>() as i32, 0);
-        gl_arc.enable_vertex_attrib_array(0);
+        gl_rc.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 8 * size_of::<f32>() as i32, 0);
+        gl_rc.enable_vertex_attrib_array(0);
 
-        gl_arc.enable(glow::TEXTURE_2D);
+        gl_rc.enable(glow::TEXTURE_2D);
     }
 
     let mut last_frame = std::time::Instant::now();
 
     let mut input = InputSystem::new();
-    let mut camera = Camera::new(
-        &glm::vec3(0.0, 0.0, 2.0f32),
-        &glm::vec3(0.0, 1.0, 0.0f32),
-        &glm::vec2(0.0, 0.0),
-    );
 
     let container_pos = glm::vec3(0.0, 0.0, 0.0);
     let container_model_mat = glm::translation(&container_pos);
@@ -268,66 +259,52 @@ fn main() {
     let light_pos = glm::vec3(3.0, 0.0, 0.0);
     let mut light_model_mat = glm::translation(&light_pos);
     light_model_mat = glm::scale(&light_model_mat, &glm::vec3(0.05, 0.05, 0.05));
-    let mut scene = Scene::light_test();
+    let mut scene = Scene::light_test(window_width, window_height);
 
     unsafe {
         event_loop.run(
             move |event, _, control_flow: &mut glutin::event_loop::ControlFlow| {
                 let mut redraw = || {
-                    gl_arc.enable(glow::DEPTH_TEST);
+                    gl_rc.enable(glow::DEPTH_TEST);
 
-                    gl_arc.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                    gl_rc.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
 
                     // draw things behind egui here
                     let current_frame = std::time::Instant::now();
 
                     input.update((current_frame - last_frame).as_secs_f32());
-                    camera.update(&mut input);
+                    scene.camera.update(&mut input);
 
-                    {
-                        let view = camera.get_view_matrix();
-                        let projection = glm::perspective_fov(
-                            camera.get_fov().to_radians(),
-                            window_width as f32,
-                            window_height as f32,
-                            0.1f32,
-                            100.0f32,
-                        );
+                    let view = scene.camera.get_view_matrix();
 
-                        lit_shader.use_program(&gl_arc);
+                    lit_shader.use_program(&gl_rc);
 
-                        lit_shader.set_vec3(&gl_arc, "u_view_pos", camera.get_pos());
+                    lit_shader.set_vec3(&gl_rc, "u_view_pos", scene.camera.get_pos());
 
-                        container_diff.use_texture(&gl_arc, 0, "u_material.diffuse", &lit_shader);
-                        container_spec.use_texture(&gl_arc, 1, "u_material.specular", &lit_shader);
-                        container_emissive.use_texture(
-                            &gl_arc,
-                            2,
-                            "u_material.emissive",
-                            &lit_shader,
-                        );
+                    container_diff.use_texture(&gl_rc, 0, "u_material.diffuse", &lit_shader);
+                    container_spec.use_texture(&gl_rc, 1, "u_material.specular", &lit_shader);
+                    container_emissive.use_texture(&gl_rc, 2, "u_material.emissive", &lit_shader);
 
-                        lit_shader.set_float(&gl_arc, "u_material.shininess", 32.0);
+                    lit_shader.set_float(&gl_rc, "u_material.shininess", 32.0);
 
-                        light_system(&mut gl_arc, &mut scene, &mut lit_shader);
+                    light_system(&mut gl_rc, &mut scene, &mut lit_shader);
 
-                        scene.entities_egui(&mut egui_glow, &window);
+                    scene.entities_egui(&mut input, &mut egui_glow, &window);
 
-                        lit_shader.set_mat4(&gl_arc, "projection", projection);
-                        lit_shader.set_mat4(&gl_arc, "view", view);
-                        lit_shader.set_mat4(&gl_arc, "model", container_model_mat);
+                    lit_shader.set_mat4(&gl_rc, "projection", scene.get_proj_matrix());
+                    lit_shader.set_mat4(&gl_rc, "view", view);
+                    lit_shader.set_mat4(&gl_rc, "model", container_model_mat);
 
-                        gl_arc.bind_vertex_array(Some(lit_vao));
-                        gl_arc.draw_arrays(glow::TRIANGLES, 0, 36);
+                    gl_rc.bind_vertex_array(Some(lit_vao));
+                    gl_rc.draw_arrays(glow::TRIANGLES, 0, 36);
 
-                        light_shader.use_program(&gl_arc);
-                        light_shader.set_mat4(&gl_arc, "projection", projection);
-                        light_shader.set_mat4(&gl_arc, "view", view);
-                        light_shader.set_mat4(&gl_arc, "model", light_model_mat);
+                    light_shader.use_program(&gl_rc);
+                    light_shader.set_mat4(&gl_rc, "projection", scene.get_proj_matrix());
+                    light_shader.set_mat4(&gl_rc, "view", view);
+                    light_shader.set_mat4(&gl_rc, "model", light_model_mat);
 
-                        gl_arc.bind_vertex_array(Some(light_vao));
-                        gl_arc.draw_arrays(glow::TRIANGLES, 0, 36);
-                    };
+                    gl_rc.bind_vertex_array(Some(light_vao));
+                    gl_rc.draw_arrays(glow::TRIANGLES, 0, 36);
 
                     egui_glow.paint(window.window());
 
@@ -354,6 +331,8 @@ fn main() {
 
                         if let glutin::event::WindowEvent::Resized(physical_size) = &event {
                             window.resize(*physical_size);
+                            scene.window_size_changed(physical_size);
+                            gl_rc.viewport(0, 0, window_width, window_height);
                         } else if let glutin::event::WindowEvent::ScaleFactorChanged {
                             new_inner_size,
                             ..
