@@ -205,7 +205,7 @@ impl Scene {
     pub fn get_proj_matrix(&self) -> glm::Mat4 {
         glm::perspective(
             self.window_width as f32 / self.window_height as f32,
-            self.camera.get_fov_angles().to_radians(),
+            self.camera.get_fov_euler().to_radians(),
             0.01,
             1000.0,
         )

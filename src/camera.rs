@@ -100,7 +100,7 @@ impl Camera {
         fwd.xyz()
     }
 
-    pub fn get_fov_angles(&self) -> f32 {
+    pub fn get_fov_euler(&self) -> f32 {
         self.fov
     }
 

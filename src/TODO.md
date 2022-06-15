@@ -1,0 +1,2 @@
+- Integrate SPECS.
+- Split out entity debugger and gizmo code from **Scene**
