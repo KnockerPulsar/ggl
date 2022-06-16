@@ -107,14 +107,17 @@ impl InputSystem {
         self.current_down[key as usize]
     }
 
+    #[allow(dead_code)]
     pub fn just_pressed(&self, key: event::VirtualKeyCode) -> bool {
         self.is_down(key) && !self.prev_down[key as usize]
     }
 
+    #[allow(dead_code)]
     pub fn just_released(&self, key: event::VirtualKeyCode) -> bool {
         !self.is_down(key) && self.prev_down[key as usize]
     }
 
+    #[allow(dead_code)]
     pub fn mouse_position(&self) -> Vec2 {
         self.current_mouse
     }

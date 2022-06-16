@@ -4,15 +4,18 @@ extern crate glow;
 extern crate glutin;
 extern crate image;
 extern crate nalgebra_glm as glm;
+extern crate serde_json;
 
 use glutin::event::WindowEvent;
 use light::*;
 use shader::ShaderProgram;
 use std::cell::RefMut;
 use std::env;
+use std::fs;
 use std::mem::size_of;
 
 mod camera;
+mod ecs;
 mod egui_drawable;
 mod input;
 mod light;
@@ -21,13 +24,13 @@ mod shader;
 mod texture;
 mod transform;
 
-use camera::Camera;
-use egui_drawable::EguiDrawable;
+use ecs::ECS;
 use glow::*;
 use input::InputSystem;
-use scene::Scene;
 use texture::Texture2D;
 use transform::Transform;
+
+use crate::scene::Scene;
 
 fn light_subsystem<T: Light>(
     gl_arc: &std::rc::Rc<Context>,
@@ -72,9 +75,9 @@ fn light_subsystem<T: Light>(
     }
 }
 
-fn light_system(gl_arc: &std::rc::Rc<Context>, scene: &mut Scene, lit_shader: &mut ShaderProgram) {
-    if let Some(mut transforms) = scene.borrow_comp_vec::<Transform>() {
-        if let Some(mut spot_lights) = scene.borrow_comp_vec::<SpotLight>() {
+fn light_system(gl_arc: &std::rc::Rc<Context>, ecs: &mut ECS, lit_shader: &mut ShaderProgram) {
+    if let Some(mut transforms) = ecs.borrow_comp_vec::<Transform>() {
+        if let Some(mut spot_lights) = ecs.borrow_comp_vec::<SpotLight>() {
             light_subsystem::<SpotLight>(
                 &gl_arc,
                 lit_shader,
@@ -85,7 +88,7 @@ fn light_system(gl_arc: &std::rc::Rc<Context>, scene: &mut Scene, lit_shader: &m
             );
         }
 
-        if let Some(mut point_lights) = scene.borrow_comp_vec::<PointLight>() {
+        if let Some(mut point_lights) = ecs.borrow_comp_vec::<PointLight>() {
             light_subsystem::<PointLight>(
                 &gl_arc,
                 lit_shader,
@@ -96,7 +99,7 @@ fn light_system(gl_arc: &std::rc::Rc<Context>, scene: &mut Scene, lit_shader: &m
             );
         }
 
-        if let Some(mut directional_lights) = scene.borrow_comp_vec::<DirectionalLight>() {
+        if let Some(mut directional_lights) = ecs.borrow_comp_vec::<DirectionalLight>() {
             let zip = directional_lights.iter_mut().zip(transforms.iter_mut());
 
             // Loop over all light and transform components
@@ -118,7 +121,7 @@ fn light_system(gl_arc: &std::rc::Rc<Context>, scene: &mut Scene, lit_shader: &m
 fn main() {
     let (window_width, window_height) = (1280, 720) as (i32, i32);
 
-    let (gl, shader_version, window, event_loop) = {
+    let (gl, _, window, event_loop) = {
         let event_loop = glutin::event_loop::EventLoop::new();
         let window_builder = glutin::window::WindowBuilder::new()
             .with_title("GG OpenGl")
@@ -259,7 +262,9 @@ fn main() {
     let light_pos = glm::vec3(3.0, 0.0, 0.0);
     let mut light_model_mat = glm::translation(&light_pos);
     light_model_mat = glm::scale(&light_model_mat, &glm::vec3(0.05, 0.05, 0.05));
-    let mut scene = Scene::light_test(window_width, window_height);
+
+    let mut scene = Scene::new(window_width, window_height);
+    let mut ecs = ECS::light_test();
 
     unsafe {
         event_loop.run(
@@ -287,9 +292,9 @@ fn main() {
 
                     lit_shader.set_float(&gl_rc, "u_material.shininess", 32.0);
 
-                    light_system(&mut gl_rc, &mut scene, &mut lit_shader);
+                    light_system(&mut gl_rc, &mut ecs, &mut lit_shader);
 
-                    scene.entities_egui(&mut input, &mut egui_glow, &window);
+                    scene.entities_egui(&mut input, &mut egui_glow, &window, &mut ecs);
 
                     lit_shader.set_mat4(&gl_rc, "projection", scene.get_proj_matrix());
                     lit_shader.set_mat4(&gl_rc, "view", view);

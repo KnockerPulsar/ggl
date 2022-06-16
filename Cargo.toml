@@ -6,7 +6,6 @@ edition = "2021"
 [package.metadata.docs.rs]
 all-features = true
 
-
 [features]
 default = []
 
@@ -30,10 +29,11 @@ winit = ["egui-winit",]
 
 
 [dependencies]
-egui = { version = "0.18.1", default-features = true }
+egui = { version = "0.18.1", features = ["default_fonts", "persistence"] }
 
 bytemuck = "1.7"
 glow = "0.11"
+
 memoffset = "0.6"
 tracing = "0.1"
 nalgebra-glm  = "*"
@@ -43,10 +43,8 @@ egui_glow = { version = "0.18.1", features = ["winit"]  }
 image = "*"
 
 egui-gizmo = "0.7.0"
-
-specs = "0.16.1"
-
-
+serde = "1"
+serde_json = "*"
 
 # Native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

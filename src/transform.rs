@@ -13,6 +13,7 @@ pub struct Transform {
 }
 
 impl Transform {
+    #[allow(dead_code)]
     pub fn zeros() -> Self {
         Transform {
             pos: glm::vec3(0.0, 0.0, 0.0),
@@ -31,21 +32,27 @@ impl Transform {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_pos(&mut self, pos: Vec3) -> &mut Self {
         self.pos = pos;
         self.model = Transform::model_matrix(self.pos, self.rot);
         self
     }
-
+    #[allow(dead_code)]
     pub fn set_rot(&mut self, euler: Vec3) -> &mut Self {
         self.rot = euler;
         self.model = Transform::model_matrix(self.pos, self.rot);
         self
     }
 
+    #[allow(dead_code)]
     pub fn set_name(&mut self, n: &str) -> &mut Self {
         self.name = String::from(n);
         self
+    }
+
+    pub fn get_name(&self) -> &str {
+        return &self.name;
     }
 
     pub fn get_model_matrix(&self) -> glm::Mat4 {
@@ -75,9 +82,9 @@ impl Transform {
 
     // https://stackoverflow.com/questions/15022630/how-to-calculate-the-angle-from-rotation-matrix
     fn euler_from_model(mat: &glm::Mat4) -> glm::Vec3 {
-        let scale_x = mat.column_part(0, 3).norm();
-        let scale_y = mat.column_part(1, 3).norm();
-        let scale_z = mat.column_part(2, 3).norm();
+        // let scale_x = mat.column_part(0, 3).norm();
+        // let scale_y = mat.column_part(1, 3).norm();
+        // let scale_z = mat.column_part(2, 3).norm();
 
         let rotation_submatrix = mat.fixed_slice::<3, 3>(0, 0);
         // let rot_x_col = rotation_submatrix.column(0) / scale_x;
