@@ -62,6 +62,7 @@ impl ShaderProgram {
     }
 
     // GLSL doesn't have bools?
+    #[allow(dead_code)]
     pub fn set_bool(&self, gl: &Rc<glow::Context>, name: &str, value: bool) {
         self.set_int(gl, name, value as i32);
     }

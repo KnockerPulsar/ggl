@@ -4,12 +4,22 @@ use glow::HasContext;
 
 use crate::shader::ShaderProgram;
 
+// u32 -> Which slot the texture uses
+#[derive(Clone)]
+pub enum TextureType {
+    Diffuse(u32),
+    Specular(u32),
+    // Emissive,
+}
+
+#[derive(Clone)]
 pub struct Texture2D {
-    handle: glow::Texture,
+    pub handle: glow::Texture,
+    pub texture_type: TextureType,
 }
 
 impl Texture2D {
-    pub fn load(gl: &Rc<glow::Context>, path: &str) -> Self {
+    pub fn load(gl: &Rc<glow::Context>, path: &str, tex_type: TextureType) -> Self {
         let texture = image::io::Reader::open(path).unwrap().decode().unwrap();
 
         let texture_w = texture.width() as i32;
@@ -27,9 +37,10 @@ impl Texture2D {
                 }
             };
 
-            println!("Loaded texture of format {:#?}", format);
             println!(
-                "GL_RED = {:?}, GL_RGB = {:?}, GL_RGBA = {:?}",
+                "Loaded texture [{}] of format {:#?}\nGL_RED = {:?}, GL_RGB = {:?}, GL_RGBA = {:?}",
+                path,
+                format,
                 glow::RED,
                 glow::RGB,
                 glow::RGBA
@@ -67,6 +78,7 @@ impl Texture2D {
 
         Texture2D {
             handle: texture_handle,
+            texture_type: tex_type,
         }
     }
 

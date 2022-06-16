@@ -791,6 +791,7 @@ name = "ggl"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "byteorder",
  "egui",
  "egui-gizmo",
  "egui-winit",
@@ -798,8 +799,10 @@ dependencies = [
  "glow",
  "glutin",
  "image",
+ "itertools",
  "memoffset",
  "nalgebra-glm",
+ "obj",
  "puffin",
  "serde",
  "serde_json",
@@ -1018,6 +1021,15 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "itertools"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f56a2d0bc861f9165be4eb3442afd3c236d8a98afd426f65d92324ae1091a484"
+dependencies = [
+ "either",
 ]
 
 [[package]]
@@ -1433,6 +1445,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "obj"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "059c95245738cdc7b40078cdd51a23200252a4c0a0a6dd005136152b3f467a4a"
 
 [[package]]
 name = "objc"
