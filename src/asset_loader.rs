@@ -31,6 +31,6 @@ impl TextureLoader {
             first_load = true;
         }
 
-        (first_load, &self.textures.get(path).unwrap())
+        (first_load, self.textures.get(path).unwrap())
     }
 }

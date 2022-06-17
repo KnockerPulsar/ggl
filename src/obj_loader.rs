@@ -43,12 +43,12 @@ impl Mesh {
         gl_rc: &Rc<Context>,
         vertices: &Vec<f32>,
         indices: &Vec<u32>,
-        textures: &Vec<Texture2D>,
+        textures: &[Texture2D],
     ) -> Self {
         let mut mesh = Mesh {
-            vert_data: vertices.clone(),
-            ind_data: indices.clone(),
-            textures: textures.clone(),
+            vert_data: vertices.to_owned(),
+            ind_data: indices.to_owned(),
+            textures: textures.to_owned(),
             vao: unsafe { gl_rc.create_vertex_array().unwrap() },
             vbo: unsafe { gl_rc.create_buffer().unwrap() },
             ebo: unsafe { gl_rc.create_buffer().unwrap() },
@@ -128,7 +128,10 @@ impl Mesh {
     }
 
     pub fn add_texture(&mut self, texture: &Texture2D) {
-        let existing_pos = self.textures.iter().position(|tex| tex.handle == texture.handle);
+        let existing_pos = self
+            .textures
+            .iter()
+            .position(|tex| tex.handle == texture.handle);
 
         if existing_pos.is_none() {
             self.textures.push(texture.clone());
@@ -150,6 +153,7 @@ impl Model {
         self.meshes.push(mesh);
     }
 
+    #[allow(dead_code)]
     pub fn get_mesh(&self, index: usize) -> &Mesh {
         &self.meshes[index]
     }
@@ -297,7 +301,6 @@ impl VertexAttribs for PNTVertex {
         }
     }
 }
-
 
 pub struct PVertex;
 impl VertexAttribs for PVertex {

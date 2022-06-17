@@ -23,8 +23,7 @@ impl ShaderProgram {
         ));
 
         let vert_shader_handle = create_shader(gl_context, &vert_shader_src, glow::VERTEX_SHADER);
-        let frag_shader_handle =
-            create_shader(gl_context, &frag_shader_src, glow::FRAGMENT_SHADER);
+        let frag_shader_handle = create_shader(gl_context, &frag_shader_src, glow::FRAGMENT_SHADER);
 
         let shader_program_handle =
             create_program(gl_context, vert_shader_handle, frag_shader_handle);
@@ -56,8 +55,7 @@ impl ShaderProgram {
 
     pub fn set_int(&self, gl: &Rc<glow::Context>, name: &str, value: i32) {
         unsafe {
-            gl
-                .uniform_1_i32(Some(&self.get_uniform_location(gl,name)), value as i32);
+            gl.uniform_1_i32(Some(&self.get_uniform_location(gl, name)), value as i32);
         }
     }
 
@@ -69,15 +67,14 @@ impl ShaderProgram {
 
     pub fn set_float(&self, gl: &Rc<glow::Context>, name: &str, value: f32) {
         unsafe {
-            gl
-                .uniform_1_f32(Some(&self.get_uniform_location(gl,name)), value);
+            gl.uniform_1_f32(Some(&self.get_uniform_location(gl, name)), value);
         }
     }
 
     pub fn set_vec3(&self, gl: &Rc<glow::Context>, name: &str, value: glm::Vec3) {
         unsafe {
             gl.uniform_3_f32(
-                Some( &self.get_uniform_location(gl,name)),
+                Some(&self.get_uniform_location(gl, name)),
                 value.x,
                 value.y,
                 value.z,
@@ -87,17 +84,16 @@ impl ShaderProgram {
 
     pub fn set_vec2(&self, gl: &Rc<glow::Context>, name: &str, value: glm::Vec2) {
         unsafe {
-            gl
-                .uniform_2_f32(Some(&self.get_uniform_location(gl,name)), value.x, value.y);
+            gl.uniform_2_f32(Some(&self.get_uniform_location(gl, name)), value.x, value.y);
         }
     }
 
     pub fn set_mat4(&self, gl: &Rc<glow::Context>, name: &str, value: glm::Mat4) {
         unsafe {
             gl.uniform_matrix_4_f32_slice(
-                Some(&self.get_uniform_location(gl,name)),
+                Some(&self.get_uniform_location(gl, name)),
                 false,
-                glm::value_ptr(&value).into(),
+                glm::value_ptr(&value),
             );
         }
     }
@@ -110,7 +106,7 @@ fn create_shader(gl: &Rc<glow::Context>, shader_src: &str, shader_type: u32) -> 
         gl.shader_source(shader_handle, shader_src);
         gl.compile_shader(shader_handle);
 
-        let mut success = gl.get_shader_compile_status(shader_handle);
+        let success = gl.get_shader_compile_status(shader_handle);
 
         if !success {
             let error_string = gl.get_shader_info_log(shader_handle);

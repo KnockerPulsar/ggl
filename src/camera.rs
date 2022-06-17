@@ -20,7 +20,7 @@ pub struct Camera {
 
 impl Camera {
     fn get_camera_vectors(world_up: &Vec3, euler_angles: &Vec2) -> (Vec3, Vec3, Vec3) {
-        let fwd_vec = Camera::forward_from_angles(&euler_angles);
+        let fwd_vec = Camera::forward_from_angles(euler_angles);
         let right_vec = cross(&fwd_vec, world_up);
         let up_vec = cross(&right_vec, &fwd_vec);
 
@@ -28,7 +28,7 @@ impl Camera {
     }
 
     pub fn new(position: &Vec3, world_up: &Vec3, angle: &Vec2) -> Camera {
-        let (fwd_vec, right_vec, up_vec) = Camera::get_camera_vectors(&world_up, &angle);
+        let (fwd_vec, right_vec, up_vec) = Camera::get_camera_vectors(world_up, angle);
 
         Camera {
             pos: *position,
@@ -86,7 +86,7 @@ impl Camera {
     }
 
     pub fn get_view_matrix(&self) -> Mat4 {
-        return look_at(&self.pos, &(self.pos + self.forward), &self.up);
+        look_at(&self.pos, &(self.pos + self.forward), &self.up)
     }
 
     fn forward_from_angles(euler_angles: &Vec2) -> Vec3 {

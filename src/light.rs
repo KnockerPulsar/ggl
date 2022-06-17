@@ -59,19 +59,19 @@ impl Light for DirectionalLight {
     ) {
         let direction = (transform.get_model_matrix() * glm::vec4(0.0, -1.0, 0.0, 0.0f32)).xyz();
 
-        shader.set_vec3(&gl, &format!("{}.direction", uniform_name), direction);
+        shader.set_vec3(gl, &format!("{}.direction", uniform_name), direction);
         shader.set_vec3(
-            &gl,
+            gl,
             &format!("{}.ambient", uniform_name),
             self.colors.ambient,
         );
         shader.set_vec3(
-            &gl,
+            gl,
             &format!("{}.diffuse", uniform_name),
             self.colors.diffuse,
         );
         shader.set_vec3(
-            &gl,
+            gl,
             &format!("{}.specular", uniform_name),
             self.colors.specular,
         );
@@ -92,24 +92,24 @@ impl Light for PointLight {
     ) {
         let position = (transform.get_model_matrix() * glm::vec4(0.0, 0.0, 0.0, 1.0)).xyz();
 
-        shader.set_vec3(&gl, &format!("{}.position", uniform_name), position);
+        shader.set_vec3(gl, &format!("{}.position", uniform_name), position);
         shader.set_vec3(
-            &gl,
+            gl,
             &format!("{}.ambient", uniform_name),
             self.colors.ambient,
         );
         shader.set_vec3(
-            &gl,
+            gl,
             &format!("{}.diffuse", uniform_name),
             self.colors.diffuse,
         );
         shader.set_vec3(
-            &gl,
+            gl,
             &format!("{}.specular", uniform_name),
             self.colors.specular,
         );
         shader.set_vec3(
-            &gl,
+            gl,
             &format!("{}.attenuation_constants", uniform_name),
             self.attenuation_constants,
         );
@@ -132,30 +132,30 @@ impl Light for SpotLight {
         let direction = (transform.get_model_matrix() * glm::vec4(0.0, -1.0, 0.0, 0.0f32)).xyz();
         let position = (transform.get_model_matrix() * glm::vec4(0.0, 0.0, 0.0, 1.0)).xyz();
 
-        shader.set_vec3(&gl, &format!("{}.position", uniform_name), position);
-        shader.set_vec3(&gl, &format!("{}.direction", uniform_name), direction);
+        shader.set_vec3(gl, &format!("{}.position", uniform_name), position);
+        shader.set_vec3(gl, &format!("{}.direction", uniform_name), direction);
         shader.set_vec3(
-            &gl,
+            gl,
             &format!("{}.ambient", uniform_name),
             self.colors.ambient,
         );
         shader.set_vec3(
-            &gl,
+            gl,
             &format!("{}.diffuse", uniform_name),
             self.colors.diffuse,
         );
         shader.set_vec3(
-            &gl,
+            gl,
             &format!("{}.specular", uniform_name),
             self.colors.specular,
         );
         shader.set_vec3(
-            &gl,
+            gl,
             &format!("{}.attenuation_constants", uniform_name),
             self.attenuation_constants,
         );
         shader.set_vec2(
-            &gl,
+            gl,
             &format!("{}.cutoff_cos", uniform_name),
             glm::cos(&glm::radians(&self.cutoff_angles)),
         );
@@ -167,6 +167,7 @@ impl Light for SpotLight {
 }
 
 impl EguiDrawable for LightColors {
+    #[allow(unused_variables)]
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
         egui::Grid::new("Light colors")
             .num_columns(3)
@@ -177,9 +178,9 @@ impl EguiDrawable for LightColors {
                 ui.label("Specular");
                 ui.end_row();
 
-                ui.color_edit_button_rgb(self.diffuse.as_mut().into());
-                ui.color_edit_button_rgb(self.ambient.as_mut().into());
-                ui.color_edit_button_rgb(self.specular.as_mut().into());
+                ui.color_edit_button_rgb(self.diffuse.as_mut());
+                ui.color_edit_button_rgb(self.ambient.as_mut());
+                ui.color_edit_button_rgb(self.specular.as_mut());
                 ui.end_row();
             });
 
@@ -188,6 +189,7 @@ impl EguiDrawable for LightColors {
 }
 
 impl EguiDrawable for Vec3 {
+    #[allow(unused_variables)]
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
         let mut fields_changed = false;
         ui.horizontal(|ui| {
@@ -207,6 +209,7 @@ impl EguiDrawable for Vec3 {
 }
 
 impl EguiDrawable for Vec2 {
+    #[allow(unused_variables)]
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
         let mut fields_changed = false;
 

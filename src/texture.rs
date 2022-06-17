@@ -92,7 +92,7 @@ impl Texture2D {
         unsafe {
             gl.active_texture(glow::TEXTURE0 + texture_unit_index as u32);
             gl.bind_texture(glow::TEXTURE_2D, Some(self.handle));
-            shader.set_int(&gl, sampler_name, texture_unit_index as i32);
+            shader.set_int(gl, sampler_name, texture_unit_index as i32);
         }
     }
 }

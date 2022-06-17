@@ -70,16 +70,17 @@ impl InputSystem {
 
     pub fn handle_events(&mut self, input_event: &glutin::event::WindowEvent) {
         match input_event {
-            event::WindowEvent::KeyboardInput { input: key, .. } => match key {
-                event::KeyboardInput {
-                    state: key_state,
-                    virtual_keycode: Some(virt_key),
-                    ..
-                } => match key_state {
-                    event::ElementState::Pressed => self.current_down[*virt_key as usize] = true,
-                    event::ElementState::Released => self.current_down[*virt_key as usize] = false,
-                },
-                _ => {}
+            event::WindowEvent::KeyboardInput {
+                input:
+                    event::KeyboardInput {
+                        state: key_state,
+                        virtual_keycode: Some(virt_key),
+                        ..
+                    },
+                ..
+            } => match key_state {
+                event::ElementState::Pressed => self.current_down[*virt_key as usize] = true,
+                event::ElementState::Released => self.current_down[*virt_key as usize] = false,
             },
             event::WindowEvent::CursorMoved { position: pos, .. } => {
                 self.prev_mouse = self.current_mouse;

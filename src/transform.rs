@@ -25,8 +25,8 @@ impl Transform {
 
     pub fn new(pos: Vec3, rot: Vec3, name: &str) -> Self {
         Transform {
-            pos: pos,
-            rot: rot,
+            pos,
+            rot,
             model: Transform::model_matrix(pos, glm::radians(&rot)),
             name: String::from(name),
         }
@@ -52,7 +52,7 @@ impl Transform {
     }
 
     pub fn get_name(&self) -> &str {
-        return &self.name;
+        &self.name
     }
 
     pub fn get_model_matrix(&self) -> glm::Mat4 {

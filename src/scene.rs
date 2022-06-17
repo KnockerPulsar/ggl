@@ -3,7 +3,7 @@ use egui_gizmo::{Gizmo, GizmoMode, GizmoOrientation};
 use egui_glow::EguiGlow;
 use glutin::{dpi::PhysicalSize, window::Window, ContextWrapper, PossiblyCurrent};
 
-use crate::{camera::Camera, ecs::ECS, input::InputSystem, transform::Transform};
+use crate::{camera::Camera, ecs::Ecs, input::InputSystem, transform::Transform};
 
 pub struct Scene {
     pub selected_entity: Option<usize>,
@@ -26,13 +26,13 @@ impl Scene {
         Scene {
             selected_entity: None,
             camera: cam,
-            window_width: window_width,
-            window_height: window_height,
+            window_width,
+            window_height,
             gizmo_mode: GizmoMode::Translate,
         }
     }
 
-    pub fn selected_entity_gizmo(&mut self, egui_ctx: &Context, ecs: &mut ECS) {
+    pub fn selected_entity_gizmo(&mut self, egui_ctx: &Context, ecs: &mut Ecs) {
         egui::Area::new("Gizmo")
             .fixed_pos((0.0, 0.0))
             .show(egui_ctx, |ui| {
@@ -65,7 +65,7 @@ impl Scene {
         input: &mut InputSystem,
         egui_glow: &mut EguiGlow,
         window: &ContextWrapper<PossiblyCurrent, Window>,
-        ecs: &mut ECS,
+        ecs: &mut Ecs,
     ) {
         egui_glow.run(window.window(), |egui_ctx| {
             if let Some(selected_entity_id) = ecs.entity_list(egui_ctx) {
@@ -74,7 +74,6 @@ impl Scene {
 
             ecs.selected_entity_components(self.selected_entity, egui_ctx);
             self.selected_entity_gizmo(egui_ctx, ecs);
-
         });
 
         if input.is_down(glutin::event::VirtualKeyCode::T) {

@@ -10,7 +10,6 @@ use light::*;
 use shader::ShaderProgram;
 use std::cell::RefMut;
 use std::env;
-use std::mem::size_of;
 
 mod asset_loader;
 mod camera;
@@ -25,17 +24,16 @@ mod texture;
 mod transform;
 
 use crate::asset_loader::TextureLoader;
-use crate::obj_loader::{Model, ObjLoader, PNTVertex, PVertex, VertexAttribs};
+use crate::obj_loader::Model;
 use crate::scene::Scene;
 use crate::texture::TextureType;
-use ecs::ECS;
+use ecs::Ecs;
 use glow::*;
 use input::InputSystem;
-use texture::Texture2D;
 use transform::Transform;
 
 fn light_subsystem<T: Light>(
-    gl_arc: &std::rc::Rc<Context>,
+    gl_rc: &std::rc::Rc<Context>,
     lit_shader: &mut ShaderProgram,
     transforms: &mut RefMut<Vec<Option<Transform>>>,
     spot_lights: &mut RefMut<Vec<Option<T>>>,
@@ -54,7 +52,7 @@ fn light_subsystem<T: Light>(
         })
         .count() as i32;
 
-    lit_shader.set_int(&gl_arc, u_name_light_num, enabled_count);
+    lit_shader.set_int(gl_rc, u_name_light_num, enabled_count);
 
     let zip = spot_lights.iter_mut().zip(transforms.iter_mut());
     let mut enabled_light_index = 0;
@@ -66,10 +64,10 @@ fn light_subsystem<T: Light>(
         // If an entity has both, draw egui and upload its data
         if let (Some(l), Some(t)) = (light, transform) {
             l.upload_data(
-                &gl_arc,
-                &t,
+                gl_rc,
+                t,
                 &format!("{}[{}]", u_light_array, enabled_light_index),
-                &lit_shader,
+                lit_shader,
             );
 
             enabled_light_index += 1;
@@ -77,11 +75,11 @@ fn light_subsystem<T: Light>(
     }
 }
 
-fn light_system(gl_rc: &std::rc::Rc<Context>, ecs: &mut ECS, lit_shader: &mut ShaderProgram) {
+fn light_system(gl_rc: &std::rc::Rc<Context>, ecs: &mut Ecs, lit_shader: &mut ShaderProgram) {
     if let Some(mut transforms) = ecs.borrow_comp_vec::<Transform>() {
         if let Some(mut spot_lights) = ecs.borrow_comp_vec::<SpotLight>() {
             light_subsystem::<SpotLight>(
-                &gl_rc,
+                gl_rc,
                 lit_shader,
                 &mut transforms,
                 &mut spot_lights,
@@ -92,7 +90,7 @@ fn light_system(gl_rc: &std::rc::Rc<Context>, ecs: &mut ECS, lit_shader: &mut Sh
 
         if let Some(mut point_lights) = ecs.borrow_comp_vec::<PointLight>() {
             light_subsystem::<PointLight>(
-                &gl_rc,
+                gl_rc,
                 lit_shader,
                 &mut transforms,
                 &mut point_lights,
@@ -111,7 +109,7 @@ fn light_system(gl_rc: &std::rc::Rc<Context>, ecs: &mut ECS, lit_shader: &mut Sh
                 // If an entity has both, draw egui and upload its data
                 if let (Some(l), Some(t)) = (light, transform) {
                     if l.is_enabled() {
-                        l.upload_data(&gl_rc, &t, "u_directional_light", &lit_shader);
+                        l.upload_data(gl_rc, t, "u_directional_light", lit_shader);
                     } else {
                         DirectionalLight {
                             enabled: false,
@@ -120,7 +118,13 @@ fn light_system(gl_rc: &std::rc::Rc<Context>, ecs: &mut ECS, lit_shader: &mut Sh
                                 diffuse: glm::Vec3::zeros(),
                                 specular: glm::Vec3::zeros(),
                             },
-                        }.upload_data(&gl_rc, &t, "u_directional_light", &lit_shader);
+                        }
+                        .upload_data(
+                            gl_rc,
+                            t,
+                            "u_directional_light",
+                            lit_shader,
+                        );
                     }
                     break;
                 }
@@ -153,8 +157,7 @@ fn main() {
         }
     };
 
-    let mut gl_rc = std::rc::Rc::new(gl);
-    let mut egui_glow = egui_glow::EguiGlow::new(&window.window(), gl_rc.clone());
+    let  gl_rc = std::rc::Rc::new(gl); let mut egui_glow = egui_glow::EguiGlow::new(window.window(), gl_rc.clone());
 
     unsafe {
         gl_rc.viewport(0, 0, window_width, window_height);
@@ -190,7 +193,7 @@ fn main() {
     let container_model_mat: glm::Mat4 = glm::translation(&container_pos);
 
     let mut scene = Scene::new(window_width, window_height);
-    let mut ecs = ECS::light_test();
+    let mut ecs = Ecs::light_test();
 
     unsafe {
         event_loop.run(
@@ -211,7 +214,7 @@ fn main() {
                     scene.entities_egui(&mut input, &mut egui_glow, &window, &mut ecs);
 
                     lit_shader.use_program(&gl_rc);
-                    light_system(&mut gl_rc, &mut ecs, &mut lit_shader);
+                    light_system(&gl_rc, &mut ecs, &mut lit_shader);
                     lit_shader.set_vec3(&gl_rc, "u_view_pos", scene.camera.get_pos());
                     lit_shader.set_float(&gl_rc, "u_material.shininess", 32.0);
                     lit_shader.set_mat4(&gl_rc, "projection", scene.get_proj_matrix());

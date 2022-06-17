@@ -2,7 +2,6 @@ use std::cell::{RefCell, RefMut};
 
 use crate::{egui_drawable::EguiDrawable, light::*, transform::Transform};
 use egui::{Context, Ui};
-use egui_glow::EguiGlow;
 
 pub trait ComponentVec {
     fn as_any(&self) -> &dyn std::any::Any;
@@ -37,14 +36,14 @@ impl<T: 'static + EguiDrawable> ComponentVec for RefCell<Vec<Option<T>>> {
     }
 }
 
-pub struct ECS {
+pub struct Ecs {
     pub entity_count: usize,
     pub component_vecs: Vec<Box<dyn ComponentVec>>,
 }
 
-impl ECS {
+impl Ecs {
     pub fn new() -> Self {
-        ECS {
+        Ecs {
             entity_count: 0,
             component_vecs: Vec::new(),
         }
@@ -142,9 +141,9 @@ impl ECS {
     }
 }
 
-impl ECS {
+impl Ecs {
     pub fn light_test() -> Self {
-        let mut ecs = ECS::new();
+        let mut ecs = Ecs::new();
 
         let spot0 = ecs.add_entity();
         ecs.add_comp_to_entity(
