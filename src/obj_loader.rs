@@ -28,6 +28,16 @@ pub struct Mesh {
     ebo: glow::Buffer,
 }
 
+fn to_bytes(vu32: &mut Vec<u32>) -> Vec<u8> {
+    let mut v8: Vec<u8> = Vec::new();
+
+    for n in vu32 {
+        v8.write_u32::<LittleEndian>(*n).unwrap();
+    }
+
+    v8
+}
+
 impl Mesh {
     pub fn new(
         gl_rc: &Rc<Context>,
@@ -69,11 +79,12 @@ impl Mesh {
                         texture_number = specular_num;
                         specular_num += 1;
                         name = "texture_specular"
-                    } // // !Only one emissive for now
-                      // TextureType::Emissive => {
-                      //     texture_number = 1;
-                      //     name = "texture_emissiveBRUH"
-                      // }
+                    }
+                    // !Only one emissive for now
+                    TextureType::Emissive => {
+                        texture_number = 1;
+                        name = "texture_emissive"
+                    }
                 }
 
                 shader.set_int(
@@ -108,7 +119,7 @@ impl Mesh {
             gl_rc.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(self.ebo));
             gl_rc.buffer_data_u8_slice(
                 glow::ELEMENT_ARRAY_BUFFER,
-                Mesh::to_bytes(&mut self.ind_data).as_slice(),
+                to_bytes(&mut self.ind_data).as_slice(),
                 glow::STATIC_DRAW,
             );
 
@@ -116,14 +127,12 @@ impl Mesh {
         }
     }
 
-    fn to_bytes(vu32: &mut Vec<u32>) -> Vec<u8> {
-        let mut v8: Vec<u8> = Vec::new();
+    pub fn add_texture(&mut self, texture: &Texture2D) {
+        let existing_pos = self.textures.iter().position(|tex| tex.handle == texture.handle);
 
-        for n in vu32 {
-            v8.write_u32::<LittleEndian>(*n).unwrap();
+        if existing_pos.is_none() {
+            self.textures.push(texture.clone());
         }
-
-        v8
     }
 }
 
@@ -135,13 +144,6 @@ pub struct Model {
 impl Model {
     pub fn load_model(gl_rc: &Rc<Context>, path: &str, texture_loader: &mut TextureLoader) -> Self {
         ObjLoader::load_obj(gl_rc, path, texture_loader)
-    }
-
-    pub fn new() -> Self {
-        Model {
-            meshes: Vec::new(),
-            directory: String::from(""),
-        }
     }
 
     pub fn add_mesh(&mut self, mesh: Mesh) {
@@ -158,12 +160,18 @@ impl Model {
             mesh.draw(gl_rc, shader);
         }
     }
+
+    pub fn add_texture(&mut self, texture: &Texture2D) {
+        for mesh in &mut self.meshes {
+            mesh.add_texture(texture);
+        }
+    }
 }
 
 impl ObjLoader {
     pub fn load_obj(gl_rc: &Rc<Context>, path: &str, texture_loader: &mut TextureLoader) -> Model {
         let mut objects = Obj::load(path).unwrap();
-        let materials = objects.load_mtls().unwrap();
+        let _ = objects.load_mtls().unwrap();
         let dir = objects.path;
 
         let all_pos = objects.data.position;
@@ -250,11 +258,7 @@ pub trait VertexAttribs {
 
 // 3 floats for position, 3 for vertex normals, 2 for texture coordinates
 #[derive(Clone)]
-pub struct PNTVertex {
-    pos: glm::Vec3,
-    normal: glm::Vec3,
-    tex_coords: glm::Vec2,
-}
+pub struct PNTVertex;
 
 impl VertexAttribs for PNTVertex {
     fn setup_attribs(gl_rc: &Rc<Context>, vao: &glow::VertexArray) {
@@ -294,18 +298,6 @@ impl VertexAttribs for PNTVertex {
     }
 }
 
-// impl From<&TexturedVertex> for PNTVertex {
-//     fn from(tex_vert: &TexturedVertex) -> Self {
-//         let p = tex_vert.position;
-//         let n = tex_vert.normal;
-//         let t = tex_vert.texture;
-//         PNTVertex {
-//             pos: glm::vec3(p[0], p[1], p[2]),
-//             normal: glm::vec3(n[0], n[1], n[2]),
-//             tex_coords: glm::vec2(t[0], t[1]),
-//         }
-//     }
-// }
 
 pub struct PVertex;
 impl VertexAttribs for PVertex {

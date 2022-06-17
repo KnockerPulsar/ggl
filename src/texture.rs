@@ -9,7 +9,7 @@ use crate::shader::ShaderProgram;
 pub enum TextureType {
     Diffuse(u32),
     Specular(u32),
-    // Emissive,
+    Emissive,
 }
 
 #[derive(Clone)]
@@ -29,7 +29,7 @@ impl Texture2D {
 
         unsafe {
             let format = match texture.color() {
-                image::ColorType::L8 => glow::RGB,
+                image::ColorType::L8 => glow::RED,
                 image::ColorType::Rgb8 => glow::RGB,
                 image::ColorType::Rgba8 => glow::RGBA,
                 _ => {

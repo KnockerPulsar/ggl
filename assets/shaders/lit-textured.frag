@@ -1,5 +1,7 @@
 #version 330 core
 
+// ! TODO: Use multiple textures for lighting
+// ! Currently, only the first of each type is used.
 struct Material {
     sampler2D texture_diffuse1;
     sampler2D texture_diffuse2;
@@ -9,7 +11,8 @@ struct Material {
     sampler2D texture_specular2;
     sampler2D texture_specular3;
     
-    // sampler2D texture_emissive1;
+    sampler2D texture_emissive1;
+    vec3 emissive_factor;
     float shininess;
 }; 
 
@@ -83,7 +86,7 @@ void main() {
         result += computeSpotLight(u_spot_lights[i], norm, frag_pos, view_direction);
     }    
     
-    // result += vec3(0.1, 0.02, 0.1);
+    result += texture(u_material.texture_emissive1, tex_coord).rrr * u_material.emissive_factor;
     frag_color = vec4(result, 1.0);
 }
 
@@ -97,9 +100,8 @@ vec3 computeDirectionalLight(DirectionalLight light, vec3 normal, vec3 view_dire
     vec3 ambient = light.ambient * texture(u_material.texture_diffuse1, tex_coord).rgb;
     vec3 diffuse = light.diffuse * diff * texture(u_material.texture_diffuse1, tex_coord).rgb;
     vec3 specular = light.specular * spec * texture(u_material.texture_specular1, tex_coord).rgb;
-    // vec3 emissive = texture(u_material.texture_emissive1, tex_coord).rgb;
     
-    return ambient + diffuse + specular /*+ emissive*/;
+    return ambient + diffuse + specular;
 }
 
 vec3 computePointLight(PointLight light, vec3 normal, vec3 frag_pos, vec3 view_direction) {
@@ -119,7 +121,6 @@ vec3 computePointLight(PointLight light, vec3 normal, vec3 frag_pos, vec3 view_d
     vec3 ambient = light.ambient * texture(u_material.texture_diffuse1, tex_coord).rgb;
     vec3 diffuse = light.diffuse * diff * texture(u_material.texture_diffuse1, tex_coord).rgb;
     vec3 specular = light.specular * spec * texture(u_material.texture_specular1, tex_coord).rgb;
-    // vec3 emissive = texture(u_material.texture_emissive1, tex_coord).rgb;
 
     
     ambient *= attenuation;
@@ -127,7 +128,7 @@ vec3 computePointLight(PointLight light, vec3 normal, vec3 frag_pos, vec3 view_d
     specular *= attenuation;
     
     
-    return ambient + diffuse + specular /*+ emissive*/;
+    return ambient + diffuse + specular;
     
 }
 
@@ -148,7 +149,6 @@ vec3 computeSpotLight(SpotLight light, vec3 normal, vec3 frag_pos, vec3 view_dir
     vec3 ambient = light.ambient * texture(u_material.texture_diffuse1, tex_coord).rgb;
     vec3 diffuse = light.diffuse * diff * texture(u_material.texture_diffuse1, tex_coord).rgb;
     vec3 specular = light.specular * spec * texture(u_material.texture_specular1, tex_coord).rgb;
-    // vec3 emissive = texture(u_material.texture_emissive1, tex_coord).rgb;
     
     float theta = dot(light_dir, normalize(-light.direction));
 
@@ -164,6 +164,6 @@ vec3 computeSpotLight(SpotLight light, vec3 normal, vec3 frag_pos, vec3 view_dir
     specular *= attenuation * intensity;
     
     
-    return ambient + diffuse + specular /*+ emissive*/;
+    return ambient + diffuse + specular;
     
 }

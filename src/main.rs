@@ -77,11 +77,11 @@ fn light_subsystem<T: Light>(
     }
 }
 
-fn light_system(gl_arc: &std::rc::Rc<Context>, ecs: &mut ECS, lit_shader: &mut ShaderProgram) {
+fn light_system(gl_rc: &std::rc::Rc<Context>, ecs: &mut ECS, lit_shader: &mut ShaderProgram) {
     if let Some(mut transforms) = ecs.borrow_comp_vec::<Transform>() {
         if let Some(mut spot_lights) = ecs.borrow_comp_vec::<SpotLight>() {
             light_subsystem::<SpotLight>(
-                &gl_arc,
+                &gl_rc,
                 lit_shader,
                 &mut transforms,
                 &mut spot_lights,
@@ -92,7 +92,7 @@ fn light_system(gl_arc: &std::rc::Rc<Context>, ecs: &mut ECS, lit_shader: &mut S
 
         if let Some(mut point_lights) = ecs.borrow_comp_vec::<PointLight>() {
             light_subsystem::<PointLight>(
-                &gl_arc,
+                &gl_rc,
                 lit_shader,
                 &mut transforms,
                 &mut point_lights,
@@ -111,9 +111,18 @@ fn light_system(gl_arc: &std::rc::Rc<Context>, ecs: &mut ECS, lit_shader: &mut S
                 // If an entity has both, draw egui and upload its data
                 if let (Some(l), Some(t)) = (light, transform) {
                     if l.is_enabled() {
-                        l.upload_data(&gl_arc, &t, "u_directional_light", &lit_shader);
-                        break;
+                        l.upload_data(&gl_rc, &t, "u_directional_light", &lit_shader);
+                    } else {
+                        DirectionalLight {
+                            enabled: false,
+                            colors: LightColors {
+                                ambient: glm::Vec3::zeros(),
+                                diffuse: glm::Vec3::zeros(),
+                                specular: glm::Vec3::zeros(),
+                            },
+                        }.upload_data(&gl_rc, &t, "u_directional_light", &lit_shader);
                     }
+                    break;
                 }
             }
         }
@@ -161,15 +170,12 @@ fn main() {
     );
 
     let mut texture_loader = TextureLoader::new();
-    // let model = Model::load_model(&gl_rc, "assets/obj/backpack.obj");
-
-    let model = Model::load_model(&gl_rc, "assets/obj/backpack.obj", &mut texture_loader);
-
-    // let verts = vec![0];
-
-    // let container_diff = Texture2D::load(&gl_rc, "assets/textures/container2.png", TextureType::Diffuse(0));
-    // let container_spec = Texture2D::load(&gl_rc, "assets/textures/container2_specular.png", TextureType::Specular(0));
-    // let container_emissive = Texture2D::load(&gl_rc, "assets/textures/container2_emissive.png", TextureType::Emissive);
+    let mut model = Model::load_model(&gl_rc, "assets/obj/backpack.obj", &mut texture_loader);
+    model.add_texture(
+        texture_loader
+            .load_texture(&gl_rc, "assets/textures/grid.jpg", TextureType::Emissive)
+            .1,
+    );
 
     let mut lit_shader = shader::ShaderProgram::new(
         &gl_rc,
@@ -177,55 +183,11 @@ fn main() {
         "assets/shaders/lit-textured.frag",
     );
 
-    let light_shader = shader::ShaderProgram::new(
-        &gl_rc,
-        "assets/shaders/textured.vert",
-        "assets/shaders/light.frag",
-    );
-
-    // let cube_vbo: glow::Buffer;
-    // let lit_vao: glow::VertexArray;
-    // let light_vao: glow::VertexArray;
-    // unsafe {
-    // Lit object setup
-    // lit_shader.use_program(&gl_rc);
-
-    // lit_vao = gl_rc.create_vertex_array().unwrap();
-    // gl_rc.bind_vertex_array(Some(lit_vao));
-
-    // cube_vbo = gl_rc.create_buffer().unwrap();
-    // gl_rc.bind_buffer(glow::ARRAY_BUFFER, Some(cube_vbo));
-    // gl_rc.buffer_data_u8_slice(
-    //     glow::ARRAY_BUFFER,
-    //     std::slice::from_raw_parts(
-    //         verts.as_ptr() as *const u8,
-    //         size_of::<f32>() * verts.len(),
-    //     ),
-    //     glow::STATIC_DRAW,
-    // );
-
-    // PNTVertex::setup_attribs(&gl_rc, &lit_vao);
-
-    // Light setup
-    // light_shader.use_program(&gl_rc);
-    // light_vao = gl_rc.create_vertex_array().unwrap();
-    // gl_rc.bind_vertex_array(Some(light_vao));
-    // gl_rc.bind_buffer(glow::ARRAY_BUFFER, Some(cube_vbo));
-
-    // PVertex::setup_attribs(&gl_rc, &light_vao);
-
-    // gl_rc.enable(glow::TEXTURE_2D);
-    // }
-
     let mut last_frame = std::time::Instant::now();
     let mut input = InputSystem::new();
 
     let container_pos = glm::vec3(0.0, 0.0, 0.0);
     let container_model_mat: glm::Mat4 = glm::translation(&container_pos);
-
-    let light_pos = glm::vec3(3.0, 0.0, 0.0);
-    let mut light_model_mat = glm::translation(&light_pos);
-    light_model_mat = glm::scale(&light_model_mat, &glm::vec3(0.05, 0.05, 0.05));
 
     let mut scene = Scene::new(window_width, window_height);
     let mut ecs = ECS::light_test();
@@ -246,14 +208,8 @@ fn main() {
 
                     let view = scene.camera.get_view_matrix();
 
-                    // container_diff.use_texture(&gl_rc, 0, "u_material.diffuse", &lit_shader);
-                    // container_spec.use_texture(&gl_rc, 1, "u_material.specular", &lit_shader);
-                    // container_emissive.use_texture(&gl_rc, 2, "u_material.emissive", &lit_shader);
-
-
-                    
                     scene.entities_egui(&mut input, &mut egui_glow, &window, &mut ecs);
-                    
+
                     lit_shader.use_program(&gl_rc);
                     light_system(&mut gl_rc, &mut ecs, &mut lit_shader);
                     lit_shader.set_vec3(&gl_rc, "u_view_pos", scene.camera.get_pos());
@@ -261,20 +217,12 @@ fn main() {
                     lit_shader.set_mat4(&gl_rc, "projection", scene.get_proj_matrix());
                     lit_shader.set_mat4(&gl_rc, "view", view);
                     lit_shader.set_mat4(&gl_rc, "model", container_model_mat);
+                    lit_shader.set_vec3(
+                        &gl_rc,
+                        "u_material.emissive_factor",
+                        glm::vec3(0.1, 0.1, 0.1),
+                    );
                     model.draw(&gl_rc, &lit_shader);
-
-
-                    // gl_rc.bind_vertex_array(Some(lit_vao));
-                    // gl_rc.draw_arrays(glow::TRIANGLES, 0, 36);
-
-                    // light_shader.use_program(&gl_rc);
-                    // light_shader.set_mat4(&gl_rc, "projection", scene.get_proj_matrix());
-                    // light_shader.set_mat4(&gl_rc, "view", view);
-                    // light_shader.set_mat4(&gl_rc, "model", light_model_mat);
-
-
-                    // gl_rc.bind_vertex_array(Some(light_vao));
-                    // gl_rc.draw_arrays(glow::TRIANGLES, 0, 36);
 
                     egui_glow.paint(window.window());
 

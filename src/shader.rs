@@ -128,7 +128,7 @@ fn create_program(
     frag_shader_handle: glow::Shader,
 ) -> glow::Program {
     unsafe {
-        let mut shader_program_handle = gl.create_program().unwrap();
+        let shader_program_handle = gl.create_program().unwrap();
         gl.attach_shader(shader_program_handle, vert_shader_handle);
         gl.attach_shader(shader_program_handle, frag_shader_handle);
         gl.link_program(shader_program_handle);
