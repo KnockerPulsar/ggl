@@ -10,9 +10,12 @@ use std::{mem::size_of, rc::Rc};
 
 use crate::{
     asset_loader::TextureLoader,
+    egui_drawable::EguiDrawable,
     shader::ShaderProgram,
+    shader_loader::ShaderLoader,
     texture::{Texture2D, TextureType},
 };
+
 use obj::Obj;
 
 pub struct ObjLoader;
@@ -141,12 +144,18 @@ impl Mesh {
 
 pub struct Model {
     pub meshes: Vec<Mesh>,
+    pub shader_name: Option<String>,
     pub directory: String,
 }
 
 impl Model {
     pub fn load_model(gl_rc: &Rc<Context>, path: &str, texture_loader: &mut TextureLoader) -> Self {
         ObjLoader::load_obj(gl_rc, path, texture_loader)
+    }
+
+    pub fn with_shader_name(&mut self, shader_name: &str) -> &mut Self {
+        self.shader_name = Some(String::from(shader_name));
+        self
     }
 
     pub fn add_mesh(&mut self, mesh: Mesh) {
@@ -158,22 +167,40 @@ impl Model {
         &self.meshes[index]
     }
 
-    pub fn draw(&self, gl_rc: &Rc<Context>, shader: &ShaderProgram) {
+    pub fn draw(&self, gl_rc: &Rc<Context>, shader_loader: &mut ShaderLoader) {
+        // ! TODO: Add a default shader
+
+        let shader_name = self.shader_name.as_ref().unwrap();
+
+        let shader = shader_loader.borrow_shader(shader_name).unwrap();
+
         unsafe { gl_rc.use_program(Some(shader.handle)) };
+
         for mesh in &self.meshes {
             mesh.draw(gl_rc, shader);
         }
     }
 
-    pub fn add_texture(&mut self, texture: &Texture2D) {
+    pub fn add_texture(&mut self, texture: &Texture2D) -> &mut Self {
         for mesh in &mut self.meshes {
             mesh.add_texture(texture);
         }
+        self
+    }
+}
+
+impl EguiDrawable for Model {
+    fn on_egui(&mut self, ui: &mut egui::Ui, index: usize) -> bool {
+        false
     }
 }
 
 impl ObjLoader {
-    pub fn load_obj(gl_rc: &Rc<Context>, path: &str, texture_loader: &mut TextureLoader) -> Model {
+    pub fn load_obj<'a>(
+        gl_rc: &Rc<Context>,
+        path: &str,
+        texture_loader: &mut TextureLoader,
+    ) -> Model {
         let mut objects = Obj::load(path).unwrap();
         let _ = objects.load_mtls().unwrap();
         let dir = objects.path;
@@ -185,6 +212,7 @@ impl ObjLoader {
         let mut model = Model {
             meshes: Vec::new(),
             directory: String::from(dir.to_str().unwrap()),
+            shader_name: None,
         };
 
         for object in objects.data.objects {

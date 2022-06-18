@@ -49,24 +49,24 @@ impl Ecs {
         }
     }
 
-    pub fn add_entity(&mut self) -> usize {
+    pub fn add_entity(&mut self) -> EntityBuilder {
         let e_id = self.entity_count;
         for comp_vec in &mut self.component_vecs {
             comp_vec.push_none();
         }
 
         self.entity_count += 1;
-        e_id
+        EntityBuilder {
+            entity_id: e_id,
+            ecs: self,
+        }
     }
 
-    pub fn add_comp_to_entity<ComponentType: 'static>(
+    pub fn add_comp_to_entity<ComponentType: 'static + EguiDrawable>(
         &mut self,
         entity: usize,
         component: ComponentType,
-    ) -> &mut Self
-    where
-        ComponentType: EguiDrawable,
-    {
+    ) -> &mut Self {
         for comp_vec in self.component_vecs.iter_mut() {
             if let Some(comp_vec) = comp_vec
                 .as_any_mut()
@@ -145,18 +145,14 @@ impl Ecs {
     pub fn light_test() -> Self {
         let mut ecs = Ecs::new();
 
-        let spot0 = ecs.add_entity();
-        ecs.add_comp_to_entity(
-            spot0,
-            Transform::new(
+        let _spot0 = ecs
+            .add_entity()
+            .with(Transform::new(
                 glm::vec3(3.0, 0.0, 0.0),
                 glm::vec3(0.0, 0.0, -90.0),
                 "Spotlight 0",
-            ),
-        )
-        .add_comp_to_entity(
-            spot0,
-            SpotLight {
+            ))
+            .with(SpotLight {
                 enabled: true,
                 colors: LightColors {
                     ambient: glm::vec3(0.1f32, 0.0, 0.0),
@@ -165,21 +161,16 @@ impl Ecs {
                 },
                 attenuation_constants: glm::vec3(1.0, 0.0, 1.0),
                 cutoff_angles: glm::vec2(2.5f32, 5f32),
-            },
-        );
+            });
 
-        let spot1 = ecs.add_entity();
-        ecs.add_comp_to_entity(
-            spot1,
-            Transform::new(
+        let _spot1 = ecs
+            .add_entity()
+            .with(Transform::new(
                 glm::vec3(-3.0, -2.0, -2.0),
                 glm::vec3(0.0, -31.0, 115.0),
                 "Spotlight 1",
-            ),
-        )
-        .add_comp_to_entity(
-            spot1,
-            SpotLight {
+            ))
+            .with(SpotLight {
                 enabled: true,
                 colors: LightColors {
                     ambient: glm::vec3(0.0, 0.0, 0.1f32),
@@ -188,21 +179,16 @@ impl Ecs {
                 },
                 attenuation_constants: glm::vec3(0.1, 0.0, 1.0),
                 cutoff_angles: glm::vec2(4.0, 10.0),
-            },
-        );
+            });
 
-        let point0 = ecs.add_entity();
-        ecs.add_comp_to_entity(
-            point0,
-            Transform::new(
+        let _point0 = ecs
+            .add_entity()
+            .with(Transform::new(
                 glm::vec3(0.0, 2.0, 0.0),
                 glm::Vec3::zeros(),
                 "Point light 0",
-            ),
-        )
-        .add_comp_to_entity(
-            point0,
-            PointLight {
+            ))
+            .with(PointLight {
                 enabled: true,
                 colors: LightColors {
                     ambient: glm::vec3(0.1, 0.03, 0.1),
@@ -210,21 +196,16 @@ impl Ecs {
                     specular: glm::vec3(0.5, 0.0, 0.0),
                 },
                 attenuation_constants: glm::vec3(0.2, 0.0, 0.5),
-            },
-        );
+            });
 
-        let point1 = ecs.add_entity();
-        ecs.add_comp_to_entity(
-            point1,
-            Transform::new(
+        let _point1 = ecs
+            .add_entity()
+            .with(Transform::new(
                 glm::vec3(0.0, -2.0, 0.0),
                 glm::Vec3::zeros(),
                 "Point light 1",
-            ),
-        )
-        .add_comp_to_entity(
-            point1,
-            PointLight {
+            ))
+            .with(PointLight {
                 enabled: true,
                 colors: LightColors {
                     ambient: glm::vec3(0.0, 0.0, 0.1),
@@ -232,30 +213,49 @@ impl Ecs {
                     specular: glm::vec3(0.0, 1.0, 0.0),
                 },
                 attenuation_constants: glm::vec3(0.1, 0.0, 1.0),
-            },
-        );
+            });
 
-        let point1 = ecs.add_entity();
-        ecs.add_comp_to_entity(
-            point1,
-            Transform::new(
+        let _directional = ecs
+            .add_entity()
+            .with(Transform::new(
                 glm::vec3(0.0, 0.0, 0.0),
                 glm::Vec3::zeros(),
                 "Directional Light",
-            ),
-        )
-        .add_comp_to_entity(
-            point1,
-            DirectionalLight {
+            ))
+            .with(DirectionalLight {
                 enabled: true,
                 colors: LightColors {
                     ambient: glm::vec3(0.0, 0.0, 0.1),
                     diffuse: glm::vec3(0.0, 0.0, 0.9),
                     specular: glm::vec3(0.0, 1.0, 0.0),
                 },
-            },
-        );
+            });
 
         ecs
+    }
+}
+
+pub struct EntityBuilder<'a> {
+    entity_id: usize,
+    ecs: &'a mut Ecs,
+}
+
+impl<'a> EntityBuilder<'a> {
+    #[allow(dead_code)]
+    pub fn with_default<ComponentType: 'static + Default + EguiDrawable>(&mut self) -> &mut Self {
+        self.ecs
+            .add_comp_to_entity::<ComponentType>(self.entity_id, ComponentType::default());
+
+        self
+    }
+
+    pub fn with<ComponentType: 'static + EguiDrawable>(
+        &mut self,
+        comp: ComponentType,
+    ) -> &mut Self {
+        self.ecs
+            .add_comp_to_entity::<ComponentType>(self.entity_id, comp);
+
+        self
     }
 }

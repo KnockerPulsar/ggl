@@ -17,9 +17,11 @@ mod ecs;
 mod egui_drawable;
 mod input;
 mod light;
+mod light_system;
 mod obj_loader;
 mod scene;
 mod shader;
+mod shader_loader;
 mod texture;
 mod transform;
 
@@ -30,108 +32,9 @@ use crate::texture::TextureType;
 use ecs::Ecs;
 use glow::*;
 use input::InputSystem;
+use light_system::*;
+use shader_loader::ShaderLoader;
 use transform::Transform;
-
-fn light_subsystem<T: Light>(
-    gl_rc: &std::rc::Rc<Context>,
-    lit_shader: &mut ShaderProgram,
-    transforms: &mut RefMut<Vec<Option<Transform>>>,
-    spot_lights: &mut RefMut<Vec<Option<T>>>,
-    u_name_light_num: &str,
-    u_light_array: &str,
-) {
-    let enabled_count = spot_lights
-        .iter()
-        // Filter out None lights or disabled lights
-        .filter(|l| {
-            if let Some(light) = *l {
-                light.is_enabled()
-            } else {
-                false
-            }
-        })
-        .count() as i32;
-
-    lit_shader.set_int(gl_rc, u_name_light_num, enabled_count);
-
-    let zip = spot_lights.iter_mut().zip(transforms.iter_mut());
-    let mut enabled_light_index = 0;
-
-    // Loop over all light and transform components
-    // Note that some entities might have one or none. In this case light/transform
-    // Will be None
-    for (light, transform) in zip {
-        // If an entity has both, draw egui and upload its data
-        if let (Some(l), Some(t)) = (light, transform) {
-            l.upload_data(
-                gl_rc,
-                t,
-                &format!("{}[{}]", u_light_array, enabled_light_index),
-                lit_shader,
-            );
-
-            enabled_light_index += 1;
-        }
-    }
-}
-
-fn light_system(gl_rc: &std::rc::Rc<Context>, ecs: &mut Ecs, lit_shader: &mut ShaderProgram) {
-    if let Some(mut transforms) = ecs.borrow_comp_vec::<Transform>() {
-        if let Some(mut spot_lights) = ecs.borrow_comp_vec::<SpotLight>() {
-            light_subsystem::<SpotLight>(
-                gl_rc,
-                lit_shader,
-                &mut transforms,
-                &mut spot_lights,
-                "u_num_spot_lights",
-                "u_spot_lights",
-            );
-        }
-
-        if let Some(mut point_lights) = ecs.borrow_comp_vec::<PointLight>() {
-            light_subsystem::<PointLight>(
-                gl_rc,
-                lit_shader,
-                &mut transforms,
-                &mut point_lights,
-                "u_num_point_lights",
-                "u_point_lights",
-            );
-        }
-
-        if let Some(mut directional_lights) = ecs.borrow_comp_vec::<DirectionalLight>() {
-            let zip = directional_lights.iter_mut().zip(transforms.iter_mut());
-
-            // Loop over all light and transform components
-            // Note that some entities might have one or none. In this case light/transform
-            // Will be None
-            for (light, transform) in zip {
-                // If an entity has both, draw egui and upload its data
-                if let (Some(l), Some(t)) = (light, transform) {
-                    if l.is_enabled() {
-                        l.upload_data(gl_rc, t, "u_directional_light", lit_shader);
-                    } else {
-                        DirectionalLight {
-                            enabled: false,
-                            colors: LightColors {
-                                ambient: glm::Vec3::zeros(),
-                                diffuse: glm::Vec3::zeros(),
-                                specular: glm::Vec3::zeros(),
-                            },
-                        }
-                        .upload_data(
-                            gl_rc,
-                            t,
-                            "u_directional_light",
-                            lit_shader,
-                        );
-                    }
-                    break;
-                }
-            }
-        }
-    }
-}
 
 fn main() {
     let (window_width, window_height) = (1280, 720) as (i32, i32);
@@ -157,7 +60,8 @@ fn main() {
         }
     };
 
-    let  gl_rc = std::rc::Rc::new(gl); let mut egui_glow = egui_glow::EguiGlow::new(window.window(), gl_rc.clone());
+    let gl_rc = std::rc::Rc::new(gl);
+    let mut egui_glow = egui_glow::EguiGlow::new(window.window(), gl_rc.clone());
 
     unsafe {
         gl_rc.viewport(0, 0, window_width, window_height);
@@ -172,19 +76,15 @@ fn main() {
             .unwrap()
     );
 
-    let mut texture_loader = TextureLoader::new();
-    let mut model = Model::load_model(&gl_rc, "assets/obj/backpack.obj", &mut texture_loader);
-    model.add_texture(
-        texture_loader
-            .load_texture(&gl_rc, "assets/textures/grid.jpg", TextureType::Emissive)
-            .1,
-    );
-
-    let mut lit_shader = shader::ShaderProgram::new(
+    let mut shader_loader = ShaderLoader::new();
+    shader_loader.load_shader(
         &gl_rc,
+        "lit-textured",
         "assets/shaders/textured.vert",
         "assets/shaders/lit-textured.frag",
     );
+
+    let mut texture_loader = TextureLoader::new();
 
     let mut last_frame = std::time::Instant::now();
     let mut input = InputSystem::new();
@@ -194,6 +94,27 @@ fn main() {
 
     let mut scene = Scene::new(window_width, window_height);
     let mut ecs = Ecs::light_test();
+
+    let _model = ecs
+        .add_entity()
+        .with(Transform::new(
+            glm::Vec3::zeros(),
+            glm::Vec3::zeros(),
+            "model",
+        ))
+        .with({
+            let mut model =
+                Model::load_model(&gl_rc, "assets/obj/backpack.obj", &mut texture_loader);
+            model.with_shader_name("lit-textured");
+
+            // ! TODO: Emissive textures seem to override diffuse textures?
+            model.add_texture(
+                texture_loader
+                    .load_texture(&gl_rc, "assets/textures/grid.jpg", TextureType::Emissive)
+                    .1,
+            );
+            model
+        });
 
     unsafe {
         event_loop.run(
@@ -213,19 +134,36 @@ fn main() {
 
                     scene.entities_egui(&mut input, &mut egui_glow, &window, &mut ecs);
 
+                    let lit_shader = shader_loader.borrow_shader("lit-textured").unwrap();
+
                     lit_shader.use_program(&gl_rc);
-                    light_system(&gl_rc, &mut ecs, &mut lit_shader);
+
+                    light_system(&gl_rc, &mut ecs, &lit_shader);
+
                     lit_shader.set_vec3(&gl_rc, "u_view_pos", scene.camera.get_pos());
                     lit_shader.set_float(&gl_rc, "u_material.shininess", 32.0);
                     lit_shader.set_mat4(&gl_rc, "projection", scene.get_proj_matrix());
                     lit_shader.set_mat4(&gl_rc, "view", view);
-                    lit_shader.set_mat4(&gl_rc, "model", container_model_mat);
                     lit_shader.set_vec3(
                         &gl_rc,
                         "u_material.emissive_factor",
-                        glm::vec3(0.1, 0.1, 0.1),
+                        glm::vec3(0.0, 0.0, 0.0),
                     );
-                    model.draw(&gl_rc, &lit_shader);
+
+                    let ts = ecs.borrow_comp_vec::<Transform>().unwrap();
+                    let mods = ecs.borrow_comp_vec::<Model>().unwrap();
+                    let mods_with_ts = mods.iter().zip(ts.iter());
+
+                    for (model, transform) in mods_with_ts {
+                        if let (Some(model), Some(transform)) = (model, transform) {
+                            shader_loader
+                                .borrow_shader("lit-textured")
+                                .unwrap()
+                                .set_mat4(&gl_rc, "model", transform.get_model_matrix());
+
+                            model.draw(&gl_rc, &mut shader_loader);
+                        }
+                    }
 
                     egui_glow.paint(window.window());
 
