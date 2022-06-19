@@ -6,7 +6,7 @@ use byteorder::{LittleEndian, WriteBytesExt};
 
 use glow::{Context, HasContext};
 use image::EncodableLayout;
-use std::{mem::size_of, rc::Rc};
+use std::{collections::HashSet, mem::size_of, rc::Rc};
 
 use crate::{
     asset_loader::TextureLoader,
@@ -46,12 +46,12 @@ impl Mesh {
         gl_rc: &Rc<Context>,
         vertices: &Vec<f32>,
         indices: &Vec<u32>,
-        textures: &[Texture2D],
+        textures: Vec<Texture2D>,
     ) -> Self {
         let mut mesh = Mesh {
             vert_data: vertices.to_owned(),
             ind_data: indices.to_owned(),
-            textures: textures.to_owned(),
+            textures: textures,
             vao: unsafe { gl_rc.create_vertex_array().unwrap() },
             vbo: unsafe { gl_rc.create_buffer().unwrap() },
             ebo: unsafe { gl_rc.create_buffer().unwrap() },
@@ -72,13 +72,13 @@ impl Mesh {
 
                 let name;
                 let texture_number;
-                match self.textures[i as usize].texture_type {
-                    TextureType::Diffuse(_) => {
+                match self.textures[i as usize].tex_type {
+                    TextureType::Diffuse => {
                         texture_number = diffuse_num;
                         diffuse_num += 1;
                         name = "texture_diffuse";
                     }
-                    TextureType::Specular(_) => {
+                    TextureType::Specular => {
                         texture_number = specular_num;
                         specular_num += 1;
                         name = "texture_specular"
@@ -90,12 +90,13 @@ impl Mesh {
                     }
                 }
 
+                // println!("{}{}", name, texture_number);
+                gl_rc.bind_texture(glow::TEXTURE_2D, Some(self.textures[i as usize].handle));
                 shader.set_int(
                     gl_rc,
                     &format!("u_material.{}{}", name, texture_number),
                     i as i32,
                 );
-                gl_rc.bind_texture(glow::TEXTURE_2D, Some(self.textures[i as usize].handle));
             }
 
             gl_rc.bind_vertex_array(Some(self.vao));
@@ -131,12 +132,7 @@ impl Mesh {
     }
 
     pub fn add_texture(&mut self, texture: &Texture2D) {
-        let existing_pos = self
-            .textures
-            .iter()
-            .position(|tex| tex.handle == texture.handle);
-
-        if existing_pos.is_none() {
+        if !self.textures.contains(&texture) {
             self.textures.push(texture.clone());
         }
     }
@@ -190,6 +186,7 @@ impl Model {
 }
 
 impl EguiDrawable for Model {
+    #[allow(unused_variables)]
     fn on_egui(&mut self, ui: &mut egui::Ui, index: usize) -> bool {
         false
     }
@@ -221,10 +218,8 @@ impl ObjLoader {
             let mut pnt: Vec<f32> = Vec::new();
             let mut inds: Vec<u32> = Vec::new();
             let mut index = 0u32;
-            let mut textures: Vec<Texture2D> = Vec::new();
+            let mut textures: HashSet<Texture2D> = HashSet::new();
 
-            let mut diff_tex_index = 1u32;
-            let mut spec_tex_index = 1u32;
             for poly in obj_group.polys.iter() {
                 for vertex in &poly.0 {
                     let pos_index = vertex.0;
@@ -247,29 +242,26 @@ impl ObjLoader {
                         obj::ObjMaterial::Ref(_) => todo!(),
                         obj::ObjMaterial::Mtl(material) => {
                             if let Some(diffuse_map) = &material.map_kd {
-                                let (first_load, texture) = texture_loader.load_texture(
-                                    gl_rc,
-                                    dir.join(diffuse_map).to_str().unwrap(),
-                                    TextureType::Diffuse(diff_tex_index),
-                                );
+                                let (_, tex_handle) = texture_loader
+                                    .load_texture(gl_rc, dir.join(diffuse_map).to_str().unwrap());
 
-                                if first_load {
-                                    textures.push(texture.clone());
+                                let texture =
+                                    Texture2D::from_handle(tex_handle, TextureType::Diffuse);
 
-                                    diff_tex_index += 1;
+                                if !textures.contains(&texture) {
+                                    textures.insert(texture);
                                 }
                             }
 
                             if let Some(spec_map) = &material.map_ks {
-                                let (first_load, texture) = texture_loader.load_texture(
-                                    gl_rc,
-                                    dir.join(spec_map).to_str().unwrap(),
-                                    TextureType::Specular(spec_tex_index),
-                                );
+                                let (_, tex_handle) = texture_loader
+                                    .load_texture(gl_rc, dir.join(spec_map).to_str().unwrap());
 
-                                if first_load {
-                                    textures.push(texture.clone());
-                                    spec_tex_index += 1;
+                                let texture =
+                                    Texture2D::from_handle(tex_handle, TextureType::Specular);
+
+                                if !textures.contains(&texture) {
+                                    textures.insert(texture);
                                 }
                             }
                         }
@@ -277,7 +269,12 @@ impl ObjLoader {
                 }
             }
 
-            model.add_mesh(Mesh::new(gl_rc, &pnt, &inds, &textures));
+            model.add_mesh(Mesh::new(
+                gl_rc,
+                &pnt,
+                &inds,
+                textures.iter().map(|tex| tex.clone()).collect(), // Should be fairly cheap to clone?
+            ));
         }
 
         model

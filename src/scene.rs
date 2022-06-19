@@ -1,7 +1,6 @@
 use egui::{Context, LayerId};
 use egui_gizmo::{Gizmo, GizmoMode, GizmoOrientation};
-use egui_glow::EguiGlow;
-use glutin::{dpi::PhysicalSize, window::Window, ContextWrapper, PossiblyCurrent};
+use glutin::dpi::PhysicalSize;
 
 use crate::{camera::Camera, ecs::Ecs, input::InputSystem, transform::Transform};
 
@@ -63,18 +62,15 @@ impl Scene {
     pub fn entities_egui(
         &mut self,
         input: &mut InputSystem,
-        egui_glow: &mut EguiGlow,
-        window: &ContextWrapper<PossiblyCurrent, Window>,
+        egui_ctx: &egui::Context,
         ecs: &mut Ecs,
     ) {
-        egui_glow.run(window.window(), |egui_ctx| {
-            if let Some(selected_entity_id) = ecs.entity_list(egui_ctx) {
-                self.selected_entity = Some(selected_entity_id);
-            }
+        if let Some(selected_entity_id) = ecs.entity_list(egui_ctx) {
+            self.selected_entity = Some(selected_entity_id);
+        }
 
-            ecs.selected_entity_components(self.selected_entity, egui_ctx);
-            self.selected_entity_gizmo(egui_ctx, ecs);
-        });
+        ecs.selected_entity_components(self.selected_entity, egui_ctx);
+        self.selected_entity_gizmo(egui_ctx, ecs);
 
         if input.is_down(glutin::event::VirtualKeyCode::T) {
             self.gizmo_mode = GizmoMode::Translate;

@@ -6,9 +6,6 @@ extern crate image;
 extern crate nalgebra_glm as glm;
 
 use glutin::event::WindowEvent;
-use light::*;
-use shader::ShaderProgram;
-use std::cell::RefMut;
 use std::env;
 
 mod asset_loader;
@@ -28,7 +25,7 @@ mod transform;
 use crate::asset_loader::TextureLoader;
 use crate::obj_loader::Model;
 use crate::scene::Scene;
-use crate::texture::TextureType;
+use crate::texture::{Texture2D, TextureType};
 use ecs::Ecs;
 use glow::*;
 use input::InputSystem;
@@ -89,16 +86,13 @@ fn main() {
     let mut last_frame = std::time::Instant::now();
     let mut input = InputSystem::new();
 
-    let container_pos = glm::vec3(0.0, 0.0, 0.0);
-    let container_model_mat: glm::Mat4 = glm::translation(&container_pos);
-
     let mut scene = Scene::new(window_width, window_height);
     let mut ecs = Ecs::light_test();
 
     let _model = ecs
         .add_entity()
         .with(Transform::new(
-            glm::Vec3::zeros(),
+            glm::vec3(0.0, 0.0, -2.0),
             glm::Vec3::zeros(),
             "model",
         ))
@@ -108,13 +102,16 @@ fn main() {
             model.with_shader_name("lit-textured");
 
             // ! TODO: Emissive textures seem to override diffuse textures?
-            model.add_texture(
+            model.add_texture(&Texture2D::from_handle(
                 texture_loader
-                    .load_texture(&gl_rc, "assets/textures/grid.jpg", TextureType::Emissive)
+                    .load_texture(&gl_rc, "assets/textures/grid.jpg")
                     .1,
-            );
+                TextureType::Emissive,
+            ));
+
             model
         });
+    let mut lights_on = false;
 
     unsafe {
         event_loop.run(
@@ -132,13 +129,20 @@ fn main() {
 
                     let view = scene.camera.get_view_matrix();
 
-                    scene.entities_egui(&mut input, &mut egui_glow, &window, &mut ecs);
-
                     let lit_shader = shader_loader.borrow_shader("lit-textured").unwrap();
 
                     lit_shader.use_program(&gl_rc);
 
-                    light_system(&gl_rc, &mut ecs, &lit_shader);
+                    egui_glow.run(window.window(), |egui_ctx| {
+                        scene.entities_egui(&mut input, &egui_ctx, &mut ecs);
+                        egui::Window::new("test").show(egui_ctx, |ui| {
+                            ui.checkbox(&mut lights_on, "Lights on?");
+
+                            if lights_on {
+                                light_system(&gl_rc, &mut ecs, &lit_shader);
+                            }
+                        });
+                    });
 
                     lit_shader.set_vec3(&gl_rc, "u_view_pos", scene.camera.get_pos());
                     lit_shader.set_float(&gl_rc, "u_material.shininess", 32.0);
@@ -147,7 +151,7 @@ fn main() {
                     lit_shader.set_vec3(
                         &gl_rc,
                         "u_material.emissive_factor",
-                        glm::vec3(0.0, 0.0, 0.0),
+                        glm::vec3(0.1, 0.1, 0.1),
                     );
 
                     let ts = ecs.borrow_comp_vec::<Transform>().unwrap();

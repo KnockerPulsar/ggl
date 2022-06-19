@@ -1,2 +1,3 @@
+- Light off trait method
 - Mesh renderer component/system
 - Split out entity debugger and gizmo code from **Scene**
