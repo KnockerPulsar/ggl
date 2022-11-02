@@ -1,4 +1,4 @@
-use glutin::event::WindowEvent;
+use glutin::event::{WindowEvent, VirtualKeyCode};
 use std::env;
 
 mod asset_loader;
@@ -132,12 +132,12 @@ fn main() {
                     lit_shader.use_program();
 
                     egui_glow.run(window.window(), |egui_ctx| {
-                        scene.entities_egui(&mut input, &egui_ctx, &mut ecs);
+                        scene.entities_egui(&mut input, egui_ctx, &mut ecs);
                         egui::Window::new("test").show(egui_ctx, |ui| {
                             ui.checkbox(&mut lights_on, "Lights on?");
 
                             if lights_on {
-                                light_system(&mut ecs, &lit_shader);
+                                light_system(&mut ecs, lit_shader);
                             } else {
                                 lit_shader.set_int("u_num_point_lights", 0);
                                 lit_shader.set_int("u_num_spot_lights", 0);
@@ -188,7 +188,9 @@ fn main() {
                     }
 
                     glutin::event::Event::WindowEvent { event, .. } => {
-                        if matches!(event, WindowEvent::CloseRequested | WindowEvent::Destroyed) {
+                        if 
+                            matches!(event, WindowEvent::CloseRequested | WindowEvent::Destroyed) 
+                                || input.just_pressed(VirtualKeyCode::Escape) {
                             *control_flow = glutin::event_loop::ControlFlow::Exit;
                         }
 
@@ -223,6 +225,7 @@ fn main() {
 
                     _ => (),
                 }
+
             },
         );
     }

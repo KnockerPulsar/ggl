@@ -133,7 +133,7 @@ impl Mesh {
     }
 
     pub fn add_texture(&mut self, texture: &Texture2D) {
-        if !self.textures.contains(&texture) {
+        if !self.textures.contains(texture) {
             self.textures.push(texture.clone());
         }
     }
@@ -195,12 +195,16 @@ impl EguiDrawable for Model {
 }
 
 impl ObjLoader {
-    pub fn load_obj<'a>(
+    pub fn load_obj(
         path: &str,
         texture_loader: &mut TextureLoader,
     ) -> Model {
+        
         let mut objects = Obj::load(path).unwrap();
-        let _ = objects.load_mtls().unwrap();
+
+        // Must run this for materials to properly load
+        objects.load_mtls().unwrap();
+
         let dir = objects.path;
 
         let all_pos = objects.data.position;
@@ -277,7 +281,7 @@ impl ObjLoader {
             model.add_mesh(Mesh::new(
                 &pnt,
                 &inds,
-                textures.iter().map(|tex| tex.clone()).collect(), // Should be fairly cheap to clone?
+                textures.iter().cloned().collect()
             ));
         }
 

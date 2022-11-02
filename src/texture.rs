@@ -15,7 +15,7 @@ pub struct Texture2D {
 impl Texture2D {
     pub fn from_handle(tex_handle: &glow::Texture, tex_type: TextureType) -> Texture2D {
         Texture2D {
-            handle: tex_handle.clone(),
+            handle: *tex_handle,
             tex_type,
         }
     }

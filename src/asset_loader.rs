@@ -32,7 +32,7 @@ impl TextureLoader {
                 }
             };
 
-            if self.textures.len() == 0 {
+            if self.textures.is_empty() {
                 println!(
                     "GL_RED = {:?}, GL_RGB = {:?}, GL_RGBA = {:?}",
                     glow::RED,

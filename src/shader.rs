@@ -14,14 +14,17 @@ impl ShaderProgram {
         frag_shader_path: &str,
     ) -> ShaderProgram {
 
-        let vert_shader_src = fs::read_to_string(vert_shader_path).expect(&format!(
-            "Failed to read vertex shader at {}",
-            vert_shader_path
-        ));
-        let frag_shader_src = fs::read_to_string(frag_shader_path).expect(&format!(
-            "Failed to read fragment shader at {}",
-            vert_shader_path
-        ));
+        let vert_shader_src = fs::read_to_string(vert_shader_path)
+            .unwrap_or_else(|_| panic!(
+                    "Failed to read vertex shader at {}",
+                    vert_shader_path
+            ));
+
+        let frag_shader_src = fs::read_to_string(frag_shader_path)
+            .unwrap_or_else(|_| panic!(
+                    "Failed to read fragment shader at {}",
+                    vert_shader_path
+            ));
 
         let vert_shader_handle = create_shader(&vert_shader_src, glow::VERTEX_SHADER);
         let frag_shader_handle = create_shader(&frag_shader_src, glow::FRAGMENT_SHADER);

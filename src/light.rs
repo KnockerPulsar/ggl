@@ -11,7 +11,7 @@ use nalgebra_glm::*;
 
 pub trait Light {
     fn upload_data(
-        self: &Self,
+        &self,
         transform: &Transform,
 
         //* String containing uniform name into light array
