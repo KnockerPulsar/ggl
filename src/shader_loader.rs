@@ -1,8 +1,5 @@
 use std::collections::HashMap;
-use std::rc::Rc;
-
 use crate::shader::ShaderProgram;
-use glow::Context;
 
 pub struct ShaderLoader {
     shaders: HashMap<String, ShaderProgram>,
@@ -17,7 +14,6 @@ impl ShaderLoader {
 
     pub fn load_shader(
         &mut self,
-        gl_rc: &Rc<Context>,
         program_name: &str,
         vert_path: &str,
         frag_path: &str,
@@ -25,7 +21,7 @@ impl ShaderLoader {
         if !self.shaders.contains_key(program_name) {
             self.shaders.insert(
                 String::from(program_name),
-                ShaderProgram::new(gl_rc, vert_path, frag_path),
+                ShaderProgram::new(vert_path, frag_path),
             );
         }
 

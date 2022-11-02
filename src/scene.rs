@@ -1,3 +1,5 @@
+extern crate nalgebra_glm as glm;
+
 use egui::{Context, LayerId};
 use egui_gizmo::{Gizmo, GizmoMode, GizmoOrientation};
 use glutin::dpi::PhysicalSize;

@@ -1,5 +1,6 @@
-use glow::{Context, HasContext};
-use std::{collections::HashMap, rc::Rc};
+use glow::HasContext;
+use std::collections::HashMap;
+use crate::get_gl;
 
 pub struct TextureLoader {
     textures: HashMap<String, glow::Texture>,
@@ -12,7 +13,8 @@ impl TextureLoader {
         }
     }
 
-    pub fn load_into_handle(&self, gl: &Rc<Context>, path: &str) -> glow::Texture {
+    pub fn load_into_handle(&self,  path: &str) -> glow::Texture {
+        let gl = get_gl();
         let texture = image::io::Reader::open(path).unwrap().decode().unwrap();
 
         let texture_w = texture.width() as i32;
@@ -74,13 +76,13 @@ impl TextureLoader {
         texture_handle
     }
 
-    pub fn load_texture(&mut self, gl_rc: &Rc<Context>, path: &str) -> (bool, &glow::Texture) {
+    pub fn load_texture(&mut self, path: &str) -> (bool, &glow::Texture) {
         let path_string = String::from(path);
         let mut first_load = false;
 
         if !self.textures.contains_key(path) {
             self.textures
-                .insert(path_string, self.load_into_handle(gl_rc, path));
+                .insert(path_string, self.load_into_handle(path));
 
             first_load = true;
         }

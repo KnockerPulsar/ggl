@@ -1,10 +1,3 @@
-extern crate egui;
-extern crate egui_glow;
-extern crate glow;
-extern crate glutin;
-extern crate image;
-extern crate nalgebra_glm as glm;
-
 use glutin::event::WindowEvent;
 use std::env;
 
@@ -21,17 +14,21 @@ mod shader;
 mod shader_loader;
 mod texture;
 mod transform;
+mod gl;
 
 use crate::asset_loader::TextureLoader;
-use crate::obj_loader::Model;
-use crate::scene::Scene;
-use crate::texture::{Texture2D, TextureType};
+use glow::HasContext;
+use obj_loader::Model;
+use scene::Scene;
+use texture::{Texture2D, TextureType};
 use ecs::Ecs;
-use glow::*;
 use input::InputSystem;
 use light_system::*;
 use shader_loader::ShaderLoader;
 use transform::Transform;
+use gl::{ set_gl, get_gl };
+
+use nalgebra_glm::*;
 
 fn main() {
     let (window_width, window_height) = (1280, 720) as (i32, i32);
@@ -57,8 +54,10 @@ fn main() {
         }
     };
 
-    let gl_rc = std::rc::Rc::new(gl);
-    let mut egui_glow = egui_glow::EguiGlow::new(window.window(), gl_rc.clone());
+    
+    let gl_rc = set_gl(std::rc::Rc::new(gl));
+
+    let mut egui_glow = egui_glow::EguiGlow::new(window.window(), get_gl().clone());
 
     unsafe {
         gl_rc.viewport(0, 0, window_width, window_height);
@@ -73,9 +72,10 @@ fn main() {
             .unwrap()
     );
 
+    println!("Loading, please wait...");
+
     let mut shader_loader = ShaderLoader::new();
     shader_loader.load_shader(
-        &gl_rc,
         "lit-textured",
         "assets/shaders/textured.vert",
         "assets/shaders/lit-textured.frag",
@@ -92,19 +92,17 @@ fn main() {
     let _model = ecs
         .add_entity()
         .with(Transform::new(
-            glm::vec3(0.0, 0.0, -2.0),
-            glm::Vec3::zeros(),
+            vec3(0.0, 0.0, -2.0),
+            Vec3::zeros(),
             "model",
         ))
         .with({
-            let mut model =
-                Model::load_model(&gl_rc, "assets/obj/backpack.obj", &mut texture_loader);
+            let mut model = Model::load_model("assets/obj/backpack.obj", &mut texture_loader);
             model.with_shader_name("lit-textured");
 
-            // ! TODO: Emissive textures seem to override diffuse textures?
             model.add_texture(&Texture2D::from_handle(
                 texture_loader
-                    .load_texture(&gl_rc, "assets/textures/grid.jpg")
+                    .load_texture("assets/textures/grid.jpg")
                     .1,
                 TextureType::Emissive,
             ));
@@ -131,7 +129,7 @@ fn main() {
 
                     let lit_shader = shader_loader.borrow_shader("lit-textured").unwrap();
 
-                    lit_shader.use_program(&gl_rc);
+                    lit_shader.use_program();
 
                     egui_glow.run(window.window(), |egui_ctx| {
                         scene.entities_egui(&mut input, &egui_ctx, &mut ecs);
@@ -139,19 +137,21 @@ fn main() {
                             ui.checkbox(&mut lights_on, "Lights on?");
 
                             if lights_on {
-                                light_system(&gl_rc, &mut ecs, &lit_shader);
+                                light_system(&mut ecs, &lit_shader);
+                            } else {
+                                lit_shader.set_int("u_num_point_lights", 0);
+                                lit_shader.set_int("u_num_spot_lights", 0);
                             }
                         });
                     });
 
-                    lit_shader.set_vec3(&gl_rc, "u_view_pos", scene.camera.get_pos());
-                    lit_shader.set_float(&gl_rc, "u_material.shininess", 32.0);
-                    lit_shader.set_mat4(&gl_rc, "projection", scene.get_proj_matrix());
-                    lit_shader.set_mat4(&gl_rc, "view", view);
+                    lit_shader.set_vec3("u_view_pos", scene.camera.get_pos());
+                    lit_shader.set_float("u_material.shininess", 32.0);
+                    lit_shader.set_mat4("projection", scene.get_proj_matrix());
+                    lit_shader.set_mat4("view", view);
                     lit_shader.set_vec3(
-                        &gl_rc,
                         "u_material.emissive_factor",
-                        glm::vec3(0.1, 0.1, 0.1),
+                        vec3(0.1, 0.1, 0.1),
                     );
 
                     let ts = ecs.borrow_comp_vec::<Transform>().unwrap();
@@ -163,9 +163,9 @@ fn main() {
                             shader_loader
                                 .borrow_shader("lit-textured")
                                 .unwrap()
-                                .set_mat4(&gl_rc, "model", transform.get_model_matrix());
+                                .set_mat4("model", transform.get_model_matrix());
 
-                            model.draw(&gl_rc, &mut shader_loader);
+                            model.draw(&mut shader_loader);
                         }
                     }
 

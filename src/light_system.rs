@@ -1,16 +1,16 @@
+extern crate nalgebra_glm as glm;
+
 use crate::{
     ecs::Ecs,
     light::Light,
     light::{DirectionalLight, LightColors, PointLight, SpotLight},
     shader::ShaderProgram,
-    transform::Transform,
+    transform::Transform
 };
 
-use glow::Context;
 use std::cell::RefMut;
 
 pub fn light_subsystem<T: Light>(
-    gl_rc: &std::rc::Rc<Context>,
     lit_shader: &ShaderProgram,
     transforms: &mut RefMut<Vec<Option<Transform>>>,
     spot_lights: &mut RefMut<Vec<Option<T>>>,
@@ -29,7 +29,7 @@ pub fn light_subsystem<T: Light>(
         })
         .count() as i32;
 
-    lit_shader.set_int(gl_rc, u_name_light_num, enabled_count);
+    lit_shader.set_int(u_name_light_num, enabled_count);
 
     let zip = spot_lights.iter_mut().zip(transforms.iter_mut());
     let mut enabled_light_index = 0;
@@ -41,7 +41,6 @@ pub fn light_subsystem<T: Light>(
         // If an entity has both, draw egui and upload its data
         if let (Some(l), Some(t)) = (light, transform) {
             l.upload_data(
-                gl_rc,
                 t,
                 &format!("{}[{}]", u_light_array, enabled_light_index),
                 lit_shader,
@@ -52,11 +51,10 @@ pub fn light_subsystem<T: Light>(
     }
 }
 
-pub fn light_system(gl_rc: &std::rc::Rc<Context>, ecs: &mut Ecs, lit_shader: &ShaderProgram) {
+pub fn light_system(ecs: &mut Ecs, lit_shader: &ShaderProgram) {
     if let Some(mut transforms) = ecs.borrow_comp_vec::<Transform>() {
         if let Some(mut spot_lights) = ecs.borrow_comp_vec::<SpotLight>() {
             light_subsystem::<SpotLight>(
-                gl_rc,
                 lit_shader,
                 &mut transforms,
                 &mut spot_lights,
@@ -67,7 +65,6 @@ pub fn light_system(gl_rc: &std::rc::Rc<Context>, ecs: &mut Ecs, lit_shader: &Sh
 
         if let Some(mut point_lights) = ecs.borrow_comp_vec::<PointLight>() {
             light_subsystem::<PointLight>(
-                gl_rc,
                 lit_shader,
                 &mut transforms,
                 &mut point_lights,
@@ -86,7 +83,7 @@ pub fn light_system(gl_rc: &std::rc::Rc<Context>, ecs: &mut Ecs, lit_shader: &Sh
                 // If an entity has both, draw egui and upload its data
                 if let (Some(l), Some(t)) = (light, transform) {
                     if l.is_enabled() {
-                        l.upload_data(gl_rc, t, "u_directional_light", lit_shader);
+                        l.upload_data(t, "u_directional_light", lit_shader);
                     } else {
                         DirectionalLight {
                             enabled: false,
@@ -97,7 +94,6 @@ pub fn light_system(gl_rc: &std::rc::Rc<Context>, ecs: &mut Ecs, lit_shader: &Sh
                             },
                         }
                         .upload_data(
-                            gl_rc,
                             t,
                             "u_directional_light",
                             lit_shader,

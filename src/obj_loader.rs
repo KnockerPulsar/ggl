@@ -4,16 +4,16 @@ extern crate obj;
 extern crate byteorder;
 use byteorder::{LittleEndian, WriteBytesExt};
 
-use glow::{Context, HasContext};
+use glow::HasContext;
 use image::EncodableLayout;
-use std::{collections::HashSet, mem::size_of, rc::Rc};
+use std::{collections::HashSet, mem::size_of};
 
 use crate::{
     asset_loader::TextureLoader,
     egui_drawable::EguiDrawable,
     shader::ShaderProgram,
     shader_loader::ShaderLoader,
-    texture::{Texture2D, TextureType},
+    texture::{Texture2D, TextureType}, get_gl,
 };
 
 use obj::Obj;
@@ -43,30 +43,31 @@ fn to_bytes(vu32: &mut Vec<u32>) -> Vec<u8> {
 
 impl Mesh {
     pub fn new(
-        gl_rc: &Rc<Context>,
         vertices: &Vec<f32>,
         indices: &Vec<u32>,
         textures: Vec<Texture2D>,
     ) -> Self {
+        let gl_rc = get_gl();
         let mut mesh = Mesh {
             vert_data: vertices.to_owned(),
             ind_data: indices.to_owned(),
-            textures: textures,
+            textures,
             vao: unsafe { gl_rc.create_vertex_array().unwrap() },
             vbo: unsafe { gl_rc.create_buffer().unwrap() },
             ebo: unsafe { gl_rc.create_buffer().unwrap() },
         };
 
-        mesh.setup_mesh(gl_rc);
+        mesh.setup_mesh();
 
         mesh
     }
 
-    pub fn draw(&self, gl_rc: &Rc<Context>, shader: &ShaderProgram) {
+    pub fn draw(&self, shader: &ShaderProgram) {
         let mut diffuse_num = 1u32;
         let mut specular_num = 1u32;
 
         unsafe {
+            let gl_rc = get_gl();
             for i in 0..(self.textures.len() as u32) {
                 gl_rc.active_texture(glow::TEXTURE0 + i);
 
@@ -93,7 +94,6 @@ impl Mesh {
                 // println!("{}{}", name, texture_number);
                 gl_rc.bind_texture(glow::TEXTURE_2D, Some(self.textures[i as usize].handle));
                 shader.set_int(
-                    gl_rc,
                     &format!("u_material.{}{}", name, texture_number),
                     i as i32,
                 );
@@ -109,7 +109,8 @@ impl Mesh {
         }
     }
 
-    fn setup_mesh(&mut self, gl_rc: &Rc<Context>) {
+    fn setup_mesh(&mut self) {
+        let gl_rc = get_gl();
         unsafe {
             gl_rc.bind_vertex_array(Some(self.vao));
             gl_rc.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbo));
@@ -127,7 +128,7 @@ impl Mesh {
                 glow::STATIC_DRAW,
             );
 
-            PNTVertex::setup_attribs(gl_rc, &self.vao);
+            PNTVertex::setup_attribs(&self.vao);
         }
     }
 
@@ -145,8 +146,8 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn load_model(gl_rc: &Rc<Context>, path: &str, texture_loader: &mut TextureLoader) -> Self {
-        ObjLoader::load_obj(gl_rc, path, texture_loader)
+    pub fn load_model(path: &str, texture_loader: &mut TextureLoader) -> Self {
+        ObjLoader::load_obj(path, texture_loader)
     }
 
     pub fn with_shader_name(&mut self, shader_name: &str) -> &mut Self {
@@ -163,17 +164,18 @@ impl Model {
         &self.meshes[index]
     }
 
-    pub fn draw(&self, gl_rc: &Rc<Context>, shader_loader: &mut ShaderLoader) {
+    pub fn draw(&self, shader_loader: &mut ShaderLoader) {
         // ! TODO: Add a default shader
 
-        let shader_name = self.shader_name.as_ref().unwrap();
+        let gl_rc = get_gl();
 
+        let shader_name = self.shader_name.as_ref().unwrap();
         let shader = shader_loader.borrow_shader(shader_name).unwrap();
 
         unsafe { gl_rc.use_program(Some(shader.handle)) };
 
         for mesh in &self.meshes {
-            mesh.draw(gl_rc, shader);
+            mesh.draw(shader);
         }
     }
 
@@ -194,7 +196,6 @@ impl EguiDrawable for Model {
 
 impl ObjLoader {
     pub fn load_obj<'a>(
-        gl_rc: &Rc<Context>,
         path: &str,
         texture_loader: &mut TextureLoader,
     ) -> Model {
@@ -212,7 +213,11 @@ impl ObjLoader {
             shader_name: None,
         };
 
-        for object in objects.data.objects {
+        for (object_index, object) in objects.data.objects.iter().enumerate()  {
+            let num_objects = objects.data.objects.len() as f32;
+            let progress_percentage = (object_index + 1) as f32 / num_objects;
+            println!("Loading object {}%", progress_percentage * 100.0);
+
             let obj_group = &object.groups[0];
 
             let mut pnt: Vec<f32> = Vec::new();
@@ -220,7 +225,7 @@ impl ObjLoader {
             let mut index = 0u32;
             let mut textures: HashSet<Texture2D> = HashSet::new();
 
-            for poly in obj_group.polys.iter() {
+            for (_, poly) in obj_group.polys.iter().enumerate() {
                 for vertex in &poly.0 {
                     let pos_index = vertex.0;
                     pnt.extend(all_pos[pos_index]);
@@ -243,7 +248,7 @@ impl ObjLoader {
                         obj::ObjMaterial::Mtl(material) => {
                             if let Some(diffuse_map) = &material.map_kd {
                                 let (_, tex_handle) = texture_loader
-                                    .load_texture(gl_rc, dir.join(diffuse_map).to_str().unwrap());
+                                    .load_texture(dir.join(diffuse_map).to_str().unwrap());
 
                                 let texture =
                                     Texture2D::from_handle(tex_handle, TextureType::Diffuse);
@@ -255,7 +260,7 @@ impl ObjLoader {
 
                             if let Some(spec_map) = &material.map_ks {
                                 let (_, tex_handle) = texture_loader
-                                    .load_texture(gl_rc, dir.join(spec_map).to_str().unwrap());
+                                    .load_texture(dir.join(spec_map).to_str().unwrap());
 
                                 let texture =
                                     Texture2D::from_handle(tex_handle, TextureType::Specular);
@@ -270,7 +275,6 @@ impl ObjLoader {
             }
 
             model.add_mesh(Mesh::new(
-                gl_rc,
                 &pnt,
                 &inds,
                 textures.iter().map(|tex| tex.clone()).collect(), // Should be fairly cheap to clone?
@@ -282,7 +286,7 @@ impl ObjLoader {
 }
 
 pub trait VertexAttribs {
-    fn setup_attribs(gl_rc: &Rc<Context>, vao: &glow::VertexArray);
+    fn setup_attribs(vao: &glow::VertexArray);
 }
 
 // 3 floats for position, 3 for vertex normals, 2 for texture coordinates
@@ -290,7 +294,9 @@ pub trait VertexAttribs {
 pub struct PNTVertex;
 
 impl VertexAttribs for PNTVertex {
-    fn setup_attribs(gl_rc: &Rc<Context>, vao: &glow::VertexArray) {
+    fn setup_attribs(vao: &glow::VertexArray) {
+        let gl_rc = get_gl();
+
         unsafe {
             gl_rc.bind_vertex_array(Some(*vao));
 
@@ -329,7 +335,9 @@ impl VertexAttribs for PNTVertex {
 
 pub struct PVertex;
 impl VertexAttribs for PVertex {
-    fn setup_attribs(gl_rc: &Rc<Context>, vao: &glow::VertexArray) {
+    fn setup_attribs(vao: &glow::VertexArray) {
+        let gl_rc = get_gl();
+
         unsafe {
             gl_rc.bind_vertex_array(Some(*vao));
 

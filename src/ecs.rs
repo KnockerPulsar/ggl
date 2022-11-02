@@ -1,3 +1,5 @@
+extern crate nalgebra_glm as glm;
+
 use std::cell::{RefCell, RefMut};
 
 use crate::{egui_drawable::EguiDrawable, light::*, transform::Transform};

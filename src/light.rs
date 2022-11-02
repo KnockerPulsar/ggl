@@ -1,5 +1,6 @@
+extern crate nalgebra_glm as glm;
+
 use std::format;
-use std::rc::Rc;
 
 use crate::egui_drawable::EguiDrawable;
 use crate::shader::ShaderProgram;
@@ -10,8 +11,7 @@ use nalgebra_glm::*;
 
 pub trait Light {
     fn upload_data(
-        &self,
-        gl: &Rc<glow::Context>, // OpenGL context
+        self: &Self,
         transform: &Transform,
 
         //* String containing uniform name into light array
@@ -51,7 +51,6 @@ pub struct SpotLight {
 impl Light for DirectionalLight {
     fn upload_data(
         &self,
-        gl: &Rc<glow::Context>, // OpenGL context
         transform: &Transform,
 
         uniform_name: &str,
@@ -59,19 +58,16 @@ impl Light for DirectionalLight {
     ) {
         let direction = (transform.get_model_matrix() * glm::vec4(0.0, -1.0, 0.0, 0.0f32)).xyz();
 
-        shader.set_vec3(gl, &format!("{}.direction", uniform_name), direction);
+        shader.set_vec3(&format!("{}.direction", uniform_name), direction);
         shader.set_vec3(
-            gl,
             &format!("{}.ambient", uniform_name),
             self.colors.ambient,
         );
         shader.set_vec3(
-            gl,
             &format!("{}.diffuse", uniform_name),
             self.colors.diffuse,
         );
         shader.set_vec3(
-            gl,
             &format!("{}.specular", uniform_name),
             self.colors.specular,
         );
@@ -85,31 +81,26 @@ impl Light for DirectionalLight {
 impl Light for PointLight {
     fn upload_data(
         &self,
-        gl: &Rc<glow::Context>,
         transform: &Transform,
         uniform_name: &str,
         shader: &ShaderProgram,
     ) {
         let position = (transform.get_model_matrix() * glm::vec4(0.0, 0.0, 0.0, 1.0)).xyz();
 
-        shader.set_vec3(gl, &format!("{}.position", uniform_name), position);
+        shader.set_vec3(&format!("{}.position", uniform_name), position);
         shader.set_vec3(
-            gl,
             &format!("{}.ambient", uniform_name),
             self.colors.ambient,
         );
         shader.set_vec3(
-            gl,
             &format!("{}.diffuse", uniform_name),
             self.colors.diffuse,
         );
         shader.set_vec3(
-            gl,
             &format!("{}.specular", uniform_name),
             self.colors.specular,
         );
         shader.set_vec3(
-            gl,
             &format!("{}.attenuation_constants", uniform_name),
             self.attenuation_constants,
         );
@@ -123,7 +114,6 @@ impl Light for PointLight {
 impl Light for SpotLight {
     fn upload_data(
         &self,
-        gl: &Rc<glow::Context>, // OpenGL context
         transform: &Transform,
 
         uniform_name: &str,
@@ -132,30 +122,25 @@ impl Light for SpotLight {
         let direction = (transform.get_model_matrix() * glm::vec4(0.0, -1.0, 0.0, 0.0f32)).xyz();
         let position = (transform.get_model_matrix() * glm::vec4(0.0, 0.0, 0.0, 1.0)).xyz();
 
-        shader.set_vec3(gl, &format!("{}.position", uniform_name), position);
-        shader.set_vec3(gl, &format!("{}.direction", uniform_name), direction);
+        shader.set_vec3(&format!("{}.position", uniform_name), position);
+        shader.set_vec3(&format!("{}.direction", uniform_name), direction);
         shader.set_vec3(
-            gl,
             &format!("{}.ambient", uniform_name),
             self.colors.ambient,
         );
         shader.set_vec3(
-            gl,
             &format!("{}.diffuse", uniform_name),
             self.colors.diffuse,
         );
         shader.set_vec3(
-            gl,
             &format!("{}.specular", uniform_name),
             self.colors.specular,
         );
         shader.set_vec3(
-            gl,
             &format!("{}.attenuation_constants", uniform_name),
             self.attenuation_constants,
         );
         shader.set_vec2(
-            gl,
             &format!("{}.cutoff_cos", uniform_name),
             glm::cos(&glm::radians(&self.cutoff_angles)),
         );
