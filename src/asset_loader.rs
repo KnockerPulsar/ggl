@@ -7,43 +7,37 @@ pub struct TextureLoader {
 }
 
 impl TextureLoader {
-    pub fn new() -> Self {
-        TextureLoader {
+    pub fn new(default_textures: &[&str]) -> Self {
+        let mut texture_loader = TextureLoader {
             textures: HashMap::new(),
+        };
+
+
+        texture_loader
+            .textures
+            .insert(
+                "default".to_owned(), 
+                Self::from_data((1,1), 
+                    glow::RGB8, 
+                    &vec![255,0,255]
+                )
+            );
+
+        for path in default_textures {
+            texture_loader.load_texture(path);
         }
+
+        texture_loader
     }
 
-    pub fn load_into_handle(&self,  path: &str) -> glow::Texture {
-        let gl = get_gl();
-        let texture = image::io::Reader::open(path).unwrap().decode().unwrap();
-
-        let texture_w = texture.width() as i32;
-        let texture_h = texture.height() as i32;
-
-        let texture_handle: glow::Texture;
-
+    pub fn from_data(
+        (texture_w, texture_h): (i32, i32), 
+        format: u32, 
+        texture_data: &[u8], 
+    ) -> glow::Texture {
         unsafe {
-            let format = match texture.color() {
-                image::ColorType::L8 => glow::RED,
-                image::ColorType::Rgb8 => glow::RGB,
-                image::ColorType::Rgba8 => glow::RGBA,
-                _ => {
-                    panic!("Unsupported color type {:?}", texture.color());
-                }
-            };
-
-            if self.textures.is_empty() {
-                println!(
-                    "GL_RED = {:?}, GL_RGB = {:?}, GL_RGBA = {:?}",
-                    glow::RED,
-                    glow::RGB,
-                    glow::RGBA
-                );
-            }
-
-            println!("Loaded texture [{}] of format {:#?}", path, format,);
-
-            texture_handle = gl.create_texture().unwrap();
+            let gl = get_gl();
+            let texture_handle = gl.create_texture().unwrap();
 
             gl.bind_texture(glow::TEXTURE_2D, Some(texture_handle));
             gl.tex_image_2d(
@@ -53,9 +47,9 @@ impl TextureLoader {
                 texture_w,
                 texture_h,
                 0,
-                format as u32,
+                format,
                 glow::UNSIGNED_BYTE,
-                Some(texture.as_bytes()),
+                Some(texture_data),
             );
             gl.generate_mipmap(glow::TEXTURE_2D);
 
@@ -71,22 +65,57 @@ impl TextureLoader {
                 glow::TEXTURE_MAG_FILTER,
                 glow::LINEAR as i32,
             );
-        }
 
-        texture_handle
+            texture_handle
+        }
     }
 
-    pub fn load_texture(&mut self, path: &str) -> (bool, &glow::Texture) {
+    pub fn load_into_handle(&self,  path: &str) -> glow::Texture {
+        dbg!(path);
+        let texture = image::io::Reader::open(path).unwrap().decode().unwrap();
+
+        let texture_w = texture.width() as i32;
+        let texture_h = texture.height() as i32;
+
+        let format = match texture.color() {
+            image::ColorType::L8 => glow::RED,
+            image::ColorType::Rgb8 => glow::RGB,
+            image::ColorType::Rgba8 => glow::RGBA,
+            _ => {
+                panic!("Unsupported color type {:?}", texture.color());
+            }
+        };
+
+        if self.textures.is_empty() {
+            println!(
+                "GL_RED = {:?}, GL_RGB = {:?}, GL_RGBA = {:?}",
+                glow::RED,
+                glow::RGB,
+                glow::RGBA
+            );
+        }
+
+        println!("Loaded texture [{}] of format {:#?}", path, format,);
+
+
+        Self::from_data(
+            (texture_w, texture_h), 
+            format,
+            texture.as_bytes()
+        )
+    }
+
+    pub fn load_texture(&mut self, path: &str) -> &glow::Texture {
         let path_string = String::from(path);
-        let mut first_load = false;
 
         if !self.textures.contains_key(path) {
             self.textures
                 .insert(path_string, self.load_into_handle(path));
-
-            first_load = true;
         }
 
-        (first_load, self.textures.get(path).unwrap())
+        match self.textures.get(path) {
+            Some(tex) => tex,
+            None => self.textures.get("default").unwrap()
+        }
     }
 }

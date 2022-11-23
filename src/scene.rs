@@ -67,11 +67,11 @@ impl Scene {
         egui_ctx: &egui::Context,
         ecs: &mut Ecs,
     ) {
-        if let Some(selected_entity_id) = ecs.entity_list(egui_ctx) {
-            self.selected_entity = Some(selected_entity_id);
+        let just_selected_entity = ecs.entity_list(egui_ctx, self.selected_entity); 
+        if just_selected_entity.is_some() {
+            self.selected_entity = just_selected_entity;
         }
 
-        ecs.selected_entity_components(self.selected_entity, egui_ctx);
         self.selected_entity_gizmo(egui_ctx, ecs);
 
         if input.is_down(glutin::event::VirtualKeyCode::T) {

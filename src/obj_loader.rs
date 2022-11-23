@@ -251,7 +251,7 @@ impl ObjLoader {
                         obj::ObjMaterial::Ref(_) => todo!(),
                         obj::ObjMaterial::Mtl(material) => {
                             if let Some(diffuse_map) = &material.map_kd {
-                                let (_, tex_handle) = texture_loader
+                                let tex_handle = texture_loader
                                     .load_texture(dir.join(diffuse_map).to_str().unwrap());
 
                                 let texture =
@@ -263,7 +263,7 @@ impl ObjLoader {
                             }
 
                             if let Some(spec_map) = &material.map_ks {
-                                let (_, tex_handle) = texture_loader
+                                let tex_handle = texture_loader
                                     .load_texture(dir.join(spec_map).to_str().unwrap());
 
                                 let texture =

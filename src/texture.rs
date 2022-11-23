@@ -1,3 +1,6 @@
+use crate::gl::get_gl;
+use glow::HasContext;
+
 // u32 -> Which slot the texture uses
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum TextureType {
@@ -19,4 +22,5 @@ impl Texture2D {
             tex_type,
         }
     }
+
 }

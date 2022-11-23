@@ -6,10 +6,16 @@ pub struct ShaderLoader {
 }
 
 impl ShaderLoader {
-    pub fn new() -> Self {
-        ShaderLoader {
+    pub fn new(shaders: &[(&str, &str, &str)]) -> Self {
+        let mut shader_loader = ShaderLoader {
             shaders: HashMap::new(),
+        };
+
+        for (program_name, vert_path, frag_path) in shaders {
+            shader_loader.load_shader(program_name, vert_path, frag_path);
         }
+
+        shader_loader
     }
 
     pub fn load_shader(

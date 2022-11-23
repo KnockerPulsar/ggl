@@ -74,14 +74,21 @@ fn main() {
 
     println!("Loading, please wait...");
 
-    let mut shader_loader = ShaderLoader::new();
-    shader_loader.load_shader(
-        "lit-textured",
-        "assets/shaders/textured.vert",
-        "assets/shaders/lit-textured.frag",
-    );
+    let shaders = [
+        ("lit-textured",
+         "assets/shaders/textured.vert",
+         "assets/shaders/lit-textured.frag"),
+    ];
 
-    let mut texture_loader = TextureLoader::new();
+    let default_textures = [
+        "assets/textures/white.jpeg",
+        "assets/textures/black.jpg",
+        "assets/textures/grid.jpg"
+    ];
+
+    let mut shader_loader = ShaderLoader::new(&shaders);
+
+    let mut texture_loader = TextureLoader::new(&default_textures);
 
     let mut last_frame = std::time::Instant::now();
     let mut input = InputSystem::new();
@@ -101,9 +108,7 @@ fn main() {
             model.with_shader_name("lit-textured");
 
             model.add_texture(&Texture2D::from_handle(
-                texture_loader
-                    .load_texture("assets/textures/grid.jpg")
-                    .1,
+                texture_loader.load_texture("assets/textures/white.jpeg"),
                 TextureType::Emissive,
             ));
 
@@ -136,12 +141,7 @@ fn main() {
                         egui::Window::new("test").show(egui_ctx, |ui| {
                             ui.checkbox(&mut lights_on, "Lights on?");
 
-                            if lights_on {
-                                light_system(&mut ecs, lit_shader);
-                            } else {
-                                lit_shader.set_int("u_num_point_lights", 0);
-                                lit_shader.set_int("u_num_spot_lights", 0);
-                            }
+                            light_system(&mut ecs, lit_shader, &lights_on);
                         });
                     });
 

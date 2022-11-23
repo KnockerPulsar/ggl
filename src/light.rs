@@ -9,6 +9,18 @@ use crate::Transform;
 use egui::Ui;
 use nalgebra_glm::*;
 
+macro_rules! shared_light_fn {
+    () => {
+        fn is_enabled(&self) -> bool {
+            self.enabled
+        }
+
+        fn set_enabled(&mut self, enabled: &bool) {
+            self.enabled = *enabled;
+        }
+    };
+}
+
 pub trait Light {
     fn upload_data(
         &self,
@@ -18,9 +30,11 @@ pub trait Light {
         //* Example: u_point_lights[0]
         uniform_name: &str,
         shader: &ShaderProgram,
+        global_enable: &bool
     );
 
     fn is_enabled(&self) -> bool;
+    fn set_enabled(&mut self, enabled: &bool);
 }
 
 pub struct LightColors {
@@ -55,27 +69,28 @@ impl Light for DirectionalLight {
 
         uniform_name: &str,
         shader: &ShaderProgram,
+        global_enable: &bool
     ) {
         let direction = (transform.get_model_matrix() * glm::vec4(0.0, -1.0, 0.0, 0.0f32)).xyz();
 
-        shader.set_vec3(&format!("{}.direction", uniform_name), direction);
-        shader.set_vec3(
-            &format!("{}.ambient", uniform_name),
-            self.colors.ambient,
-        );
-        shader.set_vec3(
-            &format!("{}.diffuse", uniform_name),
-            self.colors.diffuse,
-        );
-        shader.set_vec3(
-            &format!("{}.specular", uniform_name),
-            self.colors.specular,
-        );
+        shader
+            .set_vec3(&format!("{}.direction", uniform_name), direction)
+            .set_vec3(
+                &format!("{}.ambient", uniform_name),
+                self.colors.ambient,
+            )
+            .set_vec3(
+                &format!("{}.diffuse", uniform_name),
+                self.colors.diffuse,
+            )
+            .set_vec3(
+                &format!("{}.specular", uniform_name),
+                self.colors.specular,
+            )
+            .set_bool(&format!("{uniform_name}.is_enabled"), *global_enable && self.is_enabled());
     }
 
-    fn is_enabled(&self) -> bool {
-        self.enabled
-    }
+    shared_light_fn!{}
 }
 
 impl Light for PointLight {
@@ -84,31 +99,32 @@ impl Light for PointLight {
         transform: &Transform,
         uniform_name: &str,
         shader: &ShaderProgram,
+        global_enable: &bool
     ) {
         let position = (transform.get_model_matrix() * glm::vec4(0.0, 0.0, 0.0, 1.0)).xyz();
 
-        shader.set_vec3(&format!("{}.position", uniform_name), position);
-        shader.set_vec3(
-            &format!("{}.ambient", uniform_name),
-            self.colors.ambient,
-        );
-        shader.set_vec3(
-            &format!("{}.diffuse", uniform_name),
-            self.colors.diffuse,
-        );
-        shader.set_vec3(
-            &format!("{}.specular", uniform_name),
-            self.colors.specular,
-        );
-        shader.set_vec3(
-            &format!("{}.attenuation_constants", uniform_name),
-            self.attenuation_constants,
-        );
+        shader
+            .set_vec3(&format!("{}.position", uniform_name), position)
+            .set_vec3(
+                &format!("{}.ambient", uniform_name),
+                self.colors.ambient,
+            )
+            .set_vec3(
+                &format!("{}.diffuse", uniform_name),
+                self.colors.diffuse,
+            )
+            .set_vec3(
+                &format!("{}.specular", uniform_name),
+                self.colors.specular,
+            )
+            .set_vec3(
+                &format!("{}.attenuation_constants", uniform_name),
+                self.attenuation_constants,
+            )
+            .set_bool(&format!("{uniform_name}.is_enabled"), *global_enable && self.is_enabled());
     }
 
-    fn is_enabled(&self) -> bool {
-        self.enabled
-    }
+    shared_light_fn!{}
 }
 
 impl Light for SpotLight {
@@ -118,37 +134,38 @@ impl Light for SpotLight {
 
         uniform_name: &str,
         shader: &ShaderProgram,
+        global_enable: &bool
     ) {
         let direction = (transform.get_model_matrix() * glm::vec4(0.0, -1.0, 0.0, 0.0f32)).xyz();
         let position = (transform.get_model_matrix() * glm::vec4(0.0, 0.0, 0.0, 1.0)).xyz();
 
-        shader.set_vec3(&format!("{}.position", uniform_name), position);
-        shader.set_vec3(&format!("{}.direction", uniform_name), direction);
-        shader.set_vec3(
-            &format!("{}.ambient", uniform_name),
-            self.colors.ambient,
-        );
-        shader.set_vec3(
-            &format!("{}.diffuse", uniform_name),
-            self.colors.diffuse,
-        );
-        shader.set_vec3(
-            &format!("{}.specular", uniform_name),
-            self.colors.specular,
-        );
-        shader.set_vec3(
-            &format!("{}.attenuation_constants", uniform_name),
-            self.attenuation_constants,
-        );
-        shader.set_vec2(
-            &format!("{}.cutoff_cos", uniform_name),
-            glm::cos(&glm::radians(&self.cutoff_angles)),
-        );
+        shader
+            .set_vec3(&format!("{}.position", uniform_name), position)
+            .set_vec3(&format!("{}.direction", uniform_name), direction)
+            .set_vec3(
+                &format!("{}.ambient", uniform_name),
+                self.colors.ambient,
+            )
+            .set_vec3(
+                &format!("{}.diffuse", uniform_name),
+                self.colors.diffuse,
+            )
+            .set_vec3(
+                &format!("{}.specular", uniform_name),
+                self.colors.specular,
+            )
+            .set_vec3(
+                &format!("{}.attenuation_constants", uniform_name),
+                self.attenuation_constants,
+            )
+            .set_vec2(
+                &format!("{}.cutoff_cos", uniform_name),
+                glm::cos(&glm::radians(&self.cutoff_angles)),
+            )
+            .set_bool(&format!("{uniform_name}.is_enabled"), *global_enable && self.is_enabled());
     }
 
-    fn is_enabled(&self) -> bool {
-        self.enabled
-    }
+    shared_light_fn!{}
 }
 
 impl EguiDrawable for LightColors {

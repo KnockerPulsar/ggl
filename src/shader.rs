@@ -57,25 +57,27 @@ impl ShaderProgram {
         }
     }
 
-    pub fn set_int(&self, name: &str, value: i32) {
+    pub fn set_int(&self, name: &str, value: i32) -> &Self {
         unsafe {
             get_gl().uniform_1_i32(Some(&self.get_uniform_location(name)), value as i32);
+            self
         }
     }
 
     // GLSL doesn't have bools?
     #[allow(dead_code)]
-    pub fn set_bool(&self, name: &str, value: bool) {
-        self.set_int(name, value as i32);
+    pub fn set_bool(&self, name: &str, value: bool) -> &Self {
+        self.set_int(name, value as i32)
     }
 
-    pub fn set_float(&self, name: &str, value: f32) {
+    pub fn set_float(&self, name: &str, value: f32) -> &Self {
         unsafe {
             get_gl().uniform_1_f32(Some(&self.get_uniform_location(name)), value);
+            self
         }
     }
 
-    pub fn set_vec3(&self, name: &str, value: glm::Vec3) {
+    pub fn set_vec3(&self, name: &str, value: glm::Vec3) -> &Self {
         unsafe {
             get_gl().uniform_3_f32(
                 Some(&self.get_uniform_location(name)),
@@ -83,22 +85,27 @@ impl ShaderProgram {
                 value.y,
                 value.z,
             );
+
+            self
         }
     }
 
-    pub fn set_vec2(&self, name: &str, value: glm::Vec2) {
+    pub fn set_vec2(&self, name: &str, value: glm::Vec2) -> &Self {
         unsafe {
             get_gl().uniform_2_f32(Some(&self.get_uniform_location(name)), value.x, value.y);
+            self
         }
     }
 
-    pub fn set_mat4(&self, name: &str, value: glm::Mat4) {
+    pub fn set_mat4(&self, name: &str, value: glm::Mat4) -> &Self {
         unsafe {
             get_gl().uniform_matrix_4_f32_slice(
                 Some(&self.get_uniform_location(name)),
                 false,
                 glm::value_ptr(&value),
             );
+
+            self
         }
     }
 }

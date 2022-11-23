@@ -16,21 +16,8 @@ pub fn light_subsystem<T: Light>(
     spot_lights: &mut RefMut<Vec<Option<T>>>,
     u_name_light_num: &str,
     u_light_array: &str,
+    global_enable: &bool
 ) {
-    let enabled_count = spot_lights
-        .iter()
-        // Filter out None lights or disabled lights
-        .filter(|l| {
-            if let Some(light) = *l {
-                light.is_enabled()
-            } else {
-                false
-            }
-        })
-        .count() as i32;
-
-    lit_shader.set_int(u_name_light_num, enabled_count);
-
     let zip = spot_lights.iter_mut().zip(transforms.iter_mut());
     let mut enabled_light_index = 0;
 
@@ -44,14 +31,14 @@ pub fn light_subsystem<T: Light>(
                 t,
                 &format!("{}[{}]", u_light_array, enabled_light_index),
                 lit_shader,
+                global_enable
             );
-
             enabled_light_index += 1;
         }
     }
 }
 
-pub fn light_system(ecs: &mut Ecs, lit_shader: &ShaderProgram) {
+pub fn light_system(ecs: &mut Ecs, lit_shader: &ShaderProgram, global_enable: &bool) {
     if let Some(mut transforms) = ecs.borrow_comp_vec::<Transform>() {
         if let Some(mut spot_lights) = ecs.borrow_comp_vec::<SpotLight>() {
             light_subsystem::<SpotLight>(
@@ -60,6 +47,7 @@ pub fn light_system(ecs: &mut Ecs, lit_shader: &ShaderProgram) {
                 &mut spot_lights,
                 "u_num_spot_lights",
                 "u_spot_lights",
+                &global_enable
             );
         }
 
@@ -70,6 +58,7 @@ pub fn light_system(ecs: &mut Ecs, lit_shader: &ShaderProgram) {
                 &mut point_lights,
                 "u_num_point_lights",
                 "u_point_lights",
+                &global_enable
             );
         }
 
@@ -80,26 +69,8 @@ pub fn light_system(ecs: &mut Ecs, lit_shader: &ShaderProgram) {
             // Note that some entities might have one or none. In this case light/transform
             // Will be None
             for (light, transform) in zip {
-                // If an entity has both, draw egui and upload its data
                 if let (Some(l), Some(t)) = (light, transform) {
-                    if l.is_enabled() {
-                        l.upload_data(t, "u_directional_light", lit_shader);
-                    } else {
-                        DirectionalLight {
-                            enabled: false,
-                            colors: LightColors {
-                                ambient: glm::Vec3::zeros(),
-                                diffuse: glm::Vec3::zeros(),
-                                specular: glm::Vec3::zeros(),
-                            },
-                        }
-                        .upload_data(
-                            t,
-                            "u_directional_light",
-                            lit_shader,
-                        );
-                    }
-                    break;
+                    l.upload_data(t, "u_directional_light", lit_shader, &(*global_enable && l.is_enabled()));
                 }
             }
         }

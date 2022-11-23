@@ -22,6 +22,7 @@ struct DirectionalLight {
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
+    bool is_enabled;
 };
 
 uniform DirectionalLight u_directional_light;
@@ -34,6 +35,7 @@ struct PointLight {
     vec3 specular;
     
     vec3 attenuation_constants; // quadratic, linear, constant  
+    bool is_enabled;
 };
 
 #define MAX_POINT_LIGHTS 16
@@ -41,15 +43,16 @@ uniform int u_num_point_lights;
 uniform PointLight u_point_lights[MAX_POINT_LIGHTS];
 
 struct SpotLight {
-  vec3 position;
-  vec3 direction;
-  vec2 cutoff_cos; // inner and outer cutoff cosine of angles  
+    vec3 position;
+    vec3 direction;
+    vec2 cutoff_cos; // inner and outer cutoff cosine of angles  
 
-  vec3 ambient;
-  vec3 diffuse;
-  vec3 specular;
-  
-  vec3 attenuation_constants; // quadratic, linear, constant  
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+
+    vec3 attenuation_constants; // quadratic, linear, constant  
+    bool is_enabled;
 };
 
 #define MAX_SPOT_LIGHTS 16
@@ -74,16 +77,17 @@ void main() {
     vec3 norm = normalize(normal);
     vec3 view_direction = normalize(u_view_pos - frag_pos);
     
-    vec3 result = computeDirectionalLight(u_directional_light, norm, view_direction);    
+    vec3 result = 
+        computeDirectionalLight(u_directional_light, norm, view_direction);
     
-    int num_pt_lights = min(MAX_POINT_LIGHTS, u_num_point_lights);
-    for (int i = 0; i < num_pt_lights; i++){
-        result += computePointLight(u_point_lights[i], norm, frag_pos, view_direction);
+    for (int i = 0; i < MAX_POINT_LIGHTS; i++){
+        result += 
+            computePointLight(u_point_lights[i], norm, frag_pos, view_direction);
     }    
     
-    int num_spt_lights = min(MAX_SPOT_LIGHTS, u_num_spot_lights);
-    for (int i = 0; i < num_spt_lights; i++){
-        result += computeSpotLight(u_spot_lights[i], norm, frag_pos, view_direction);
+    for (int i = 0; i < MAX_SPOT_LIGHTS; i++){
+        result += 
+            computeSpotLight(u_spot_lights[i], norm, frag_pos, view_direction);
     }    
     
     result += texture(u_material.texture_emissive1, tex_coord).rrr * u_material.emissive_factor;
@@ -91,6 +95,8 @@ void main() {
 }
 
 vec3 computeDirectionalLight(DirectionalLight light, vec3 normal, vec3 view_direction) {
+    if(!light.is_enabled) return vec3(0.0);
+
     vec3 light_dir = normalize(-light.direction);
     float diff = max(dot(normal, light_dir), 0.0);
     
@@ -105,6 +111,8 @@ vec3 computeDirectionalLight(DirectionalLight light, vec3 normal, vec3 view_dire
 }
 
 vec3 computePointLight(PointLight light, vec3 normal, vec3 frag_pos, vec3 view_direction) {
+    if(!light.is_enabled) return vec3(0.0);
+
     vec3 light_dir = normalize(light.position - frag_pos);    
     float diff = max(dot(normal, light_dir), 0.0);
     
@@ -133,6 +141,8 @@ vec3 computePointLight(PointLight light, vec3 normal, vec3 frag_pos, vec3 view_d
 }
 
 vec3 computeSpotLight(SpotLight light, vec3 normal, vec3 frag_pos, vec3 view_direction) {
+    if(!light.is_enabled) return vec3(0.0);
+
     vec3 light_dir = normalize(light.position - frag_pos);    
     float diff = max(dot(normal, light_dir), 0.0);
     
