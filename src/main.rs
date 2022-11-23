@@ -34,7 +34,7 @@ fn main() {
     let (window_width, window_height) = (1280, 720) as (i32, i32);
 
     let (gl, _, window, event_loop) = {
-        let event_loop = glutin::event_loop::EventLoop::new();
+        let event_loop: glutin::event_loop::EventLoop<()> = glutin::event_loop::EventLoopBuilder::with_user_event().build();
         let window_builder = glutin::window::WindowBuilder::new()
             .with_title("GG OpenGl")
             .with_inner_size(glutin::dpi::LogicalSize::new(window_width, window_height));
@@ -43,6 +43,7 @@ fn main() {
             let window = glutin::ContextBuilder::new()
                 .with_depth_buffer(24)
                 .with_vsync(true)
+                .with_hardware_acceleration(Some(true))
                 .build_windowed(window_builder, &event_loop)
                 .unwrap()
                 .make_current()
@@ -55,9 +56,9 @@ fn main() {
     };
 
     
-    let gl_rc = set_gl(std::rc::Rc::new(gl));
+    let gl_rc = set_gl(std::sync::Arc::new(gl));
 
-    let mut egui_glow = egui_glow::EguiGlow::new(window.window(), get_gl().clone());
+    let mut egui_glow = egui_glow::EguiGlow::new(&event_loop, get_gl().clone());
 
     unsafe {
         gl_rc.viewport(0, 0, window_width, window_height);
@@ -108,7 +109,7 @@ fn main() {
             model.with_shader_name("lit-textured");
 
             model.add_texture(&Texture2D::from_handle(
-                texture_loader.load_texture("assets/textures/white.jpeg"),
+                texture_loader.load_texture("default"),
                 TextureType::Emissive,
             ));
 

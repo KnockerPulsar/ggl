@@ -8,6 +8,7 @@ use crate::Transform;
 
 use egui::Ui;
 use nalgebra_glm::*;
+use tracing::enabled;
 
 macro_rules! shared_light_fn {
     () => {
@@ -41,6 +42,16 @@ pub struct LightColors {
     pub ambient: Vec3,
     pub diffuse: Vec3,
     pub specular: Vec3,
+}
+
+impl LightColors {
+    pub fn from_specular(spec: Vec3, dimming_factor: f32) -> Self {
+        LightColors { 
+            ambient: spec * dimming_factor * dimming_factor, 
+            diffuse: spec * dimming_factor, 
+            specular: spec 
+        }
+    }
 }
 
 pub struct DirectionalLight {
@@ -195,15 +206,22 @@ impl EguiDrawable for Vec3 {
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
         let mut fields_changed = false;
         ui.horizontal(|ui| {
-            fields_changed |= ui
-                .add(egui::DragValue::new(&mut self.x).speed(0.01))
-                .changed();
-            fields_changed |= ui
-                .add(egui::DragValue::new(&mut self.y).speed(0.01))
-                .changed();
-            fields_changed |= ui
-                .add(egui::DragValue::new(&mut self.z).speed(0.01))
-                .changed();
+            ui.scope(|ui| {
+                ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_RED;
+                fields_changed |= ui
+                    .add(egui::DragValue::new(&mut self.x).speed(0.01))
+                    .changed();
+
+                ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_GREEN;
+                fields_changed |= ui
+                    .add(egui::DragValue::new(&mut self.y).speed(0.01))
+                    .changed();
+
+                ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_BLUE;
+                fields_changed |= ui
+                    .add(egui::DragValue::new(&mut self.z).speed(0.01))
+                    .changed();
+                })
         });
 
         fields_changed
@@ -216,60 +234,80 @@ impl EguiDrawable for Vec2 {
         let mut fields_changed = false;
 
         ui.horizontal(|ui| {
-            fields_changed |= ui
-                .add(egui::DragValue::new(&mut self.x).speed(0.01))
-                .changed();
-            fields_changed |= ui
-                .add(egui::DragValue::new(&mut self.y).speed(0.01))
-                .changed();
+
+            ui.scope(|ui| {
+                ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_RED;
+                fields_changed |= ui
+                    .add(egui::DragValue::new(&mut self.x).speed(0.01))
+                    .changed();
+
+                ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_GREEN;
+                fields_changed |= ui
+                    .add(egui::DragValue::new(&mut self.y).speed(0.01))
+                    .changed();
+            })
         });
         fields_changed
     }
 }
 
-impl EguiDrawable for SpotLight {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-        egui::CollapsingHeader::new(format!("Spotlight {}", index)).show(ui, |ui| {
-            ui.add(egui::Checkbox::new(&mut self.enabled, "enabled"));
+macro_rules! enabled_header {
+    ($self: ident, $ui: ident, $header_name: literal, $index: ident , $body: expr) => {
+        let id = $ui.make_persistent_id(format!("{} {}", $header_name, $index));
 
-            if self.enabled {
-                ui.add(egui::Label::new("Cuttoff angles"));
-                self.cutoff_angles.on_egui(ui, index);
-
-                ui.add(egui::Label::new("Attenuation constants"));
-                self.attenuation_constants.on_egui(ui, index);
-
-                self.colors.on_egui(ui, index);
+        egui::collapsing_header::CollapsingState::load_with_default_open($ui.ctx(), id, false)
+            .show_header($ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(format!("{} {}", $header_name, $index));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
+                        ui.checkbox(&mut $self.enabled, "");
+                    });
+                });
+            })
+        .body( |$ui| {
+            if $self.enabled {
+                $body
             }
         });
+    };
+}
+
+impl EguiDrawable for SpotLight {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
+
+        enabled_header!(self, ui, "Spot light", index, {
+            ui.add(egui::Label::new("Cuttoff angles"));
+            self.cutoff_angles.on_egui(ui, index);
+
+            ui.add(egui::Label::new("Attenuation constants"));
+            self.attenuation_constants.on_egui(ui, index);
+
+            self.colors.on_egui(ui, index);
+
+        });
+        
         false
     }
 }
 
 impl EguiDrawable for PointLight {
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-        egui::CollapsingHeader::new(format!("Point light {}", index)).show(ui, |ui| {
-            ui.add(egui::Checkbox::new(&mut self.enabled, "enabled"));
 
-            if self.enabled {
-                ui.add(egui::Label::new("Attenuation constants"));
-                self.attenuation_constants.on_egui(ui, index);
+        enabled_header!(self, ui, "Point light", index, {
+            ui.add(egui::Label::new("Attenuation constants"));
+            self.attenuation_constants.on_egui(ui, index);
 
-                self.colors.on_egui(ui, index);
-            }
+            self.colors.on_egui(ui, index);
         });
+
         false
     }
 }
 
 impl EguiDrawable for DirectionalLight {
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-        egui::CollapsingHeader::new(format!("Directional Light {}", index)).show(ui, |ui| {
-            ui.add(egui::Checkbox::new(&mut self.enabled, "enabled"));
-
-            if self.enabled {
-                self.colors.on_egui(ui, index);
-            }
+        enabled_header!(self, ui, "Directional light", index, {
+            self.colors.on_egui(ui, index);
         });
 
         false

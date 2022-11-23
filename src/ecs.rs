@@ -159,11 +159,7 @@ impl Ecs {
             ))
             .with(SpotLight {
                 enabled: true,
-                colors: LightColors {
-                    ambient: glm::vec3(0.1f32, 0.0, 0.0),
-                    diffuse: glm::vec3(10.0, 0.0, 0.0),
-                    specular: glm::vec3(0.0, 10.0, 10.0),
-                },
+                colors: LightColors::from_specular(glm::vec3(0., 10., 10.), 0.1),
                 attenuation_constants: glm::vec3(1.0, 0.0, 1.0),
                 cutoff_angles: glm::vec2(2.5f32, 5f32),
             });
@@ -177,11 +173,7 @@ impl Ecs {
             ))
             .with(SpotLight {
                 enabled: true,
-                colors: LightColors {
-                    ambient: glm::vec3(0.0, 0.0, 0.1f32),
-                    diffuse: glm::vec3(0.0, 1.0, 0.0f32),
-                    specular: glm::vec3(1.0, 0.0, 0.0),
-                },
+                colors: LightColors::from_specular(glm::vec3(1., 0., 0.), 0.7),
                 attenuation_constants: glm::vec3(0.1, 0.0, 1.0),
                 cutoff_angles: glm::vec2(4.0, 10.0),
             });
@@ -195,11 +187,7 @@ impl Ecs {
             ))
             .with(PointLight {
                 enabled: true,
-                colors: LightColors {
-                    ambient: glm::vec3(0.1, 0.03, 0.1),
-                    diffuse: glm::vec3(0.7, 0.1, 0.7),
-                    specular: glm::vec3(0.5, 0.0, 0.0),
-                },
+                colors:  LightColors::from_specular(glm::vec3(2., 0., 0.), 1.4),
                 attenuation_constants: glm::vec3(0.2, 0.0, 0.5),
             });
 
@@ -212,11 +200,7 @@ impl Ecs {
             ))
             .with(PointLight {
                 enabled: true,
-                colors: LightColors {
-                    ambient: glm::vec3(0.0, 0.0, 0.1),
-                    diffuse: glm::vec3(0.0, 0.0, 0.9),
-                    specular: glm::vec3(0.0, 1.0, 0.0),
-                },
+                colors: LightColors::from_specular(glm::vec3(0., 1., 0.), 0.5),
                 attenuation_constants: glm::vec3(0.1, 0.0, 1.0),
             });
 
@@ -229,11 +213,7 @@ impl Ecs {
             ))
             .with(DirectionalLight {
                 enabled: true,
-                colors: LightColors {
-                    ambient: glm::vec3(0.0, 0.0, 0.1),
-                    diffuse: glm::vec3(0.0, 0.0, 0.9),
-                    specular: glm::vec3(0.0, 1.0, 0.0),
-                },
+                colors: LightColors::from_specular(glm::vec3(0., 1., 0.), 0.9),
             });
 
         ecs
