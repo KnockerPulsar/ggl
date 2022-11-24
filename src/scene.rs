@@ -42,9 +42,7 @@ impl Scene {
                     // If we have a selected entity
                     if let Some(selected_entity_id) = self.selected_entity {
                         // If the entity has a transform
-                        if let Some(selected_entity_transform) =
-                            &mut ecs.borrow_comp_vec::<Transform>().unwrap()[selected_entity_id]
-                        {
+                        ecs.do_entity(selected_entity_id, |selected_entity_transform: &mut Transform| {
                             let gizmo = Gizmo::new("My gizmo")
                                 .view_matrix(self.camera.get_view_matrix())
                                 .projection_matrix(self.get_proj_matrix())
@@ -55,7 +53,7 @@ impl Scene {
                             if let Some(response) = gizmo.interact(ui) {
                                 selected_entity_transform.set_model(response.transform.into());
                             }
-                        }
+                        })
                     }
                 })
             });

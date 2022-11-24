@@ -1,6 +1,6 @@
 extern crate nalgebra_glm as glm;
 
-use std::cell::{RefCell, RefMut};
+use std::{cell::{RefCell, RefMut}, borrow::{Borrow, BorrowMut}};
 
 use crate::{egui_drawable::EguiDrawable, light::*, transform::Transform};
 use egui::{Context, Ui};
@@ -93,7 +93,7 @@ impl Ecs {
         self
     }
 
-    pub fn borrow_comp_vec<ComponentType: 'static>(
+    fn borrow_comp_vec<ComponentType: 'static>(
         &self,
     ) -> Option<RefMut<Vec<Option<ComponentType>>>> {
         for comp_vec in self.component_vecs.iter() {
@@ -143,6 +143,48 @@ impl Ecs {
         });
 
         just_selected_entity
+    }
+
+    pub fn do_n<T , U>(&self, mut f: impl FnMut(&mut T, &mut U), n: usize) 
+        where T: 'static, U: 'static 
+    {
+        self.borrow_comp_vec::<T>()
+            .unwrap()
+            .borrow_mut()
+            .iter_mut()
+            .zip(self.borrow_comp_vec::<U>().unwrap().iter_mut())
+            .filter(|(x,y)| x.is_some() && y.is_some())
+            .map(|(x,y)| (x.as_mut().unwrap(), y.as_mut().unwrap()))
+            .take(n)
+            .for_each(|(x,y)| f(x, y));
+    }
+
+    pub fn do_all<T , U>(&self, f: impl FnMut(&mut T, &mut U)) 
+        where T: 'static, U: 'static 
+    {
+        self.do_n::<T,U>(f, self.entity_count);
+    }
+
+    pub fn do_one<T , U>(&self, f: impl FnMut(&mut T, &mut U)) 
+        where T: 'static, U: 'static 
+    {
+        self.do_n::<T,U>(f, 1);
+    }
+
+    pub fn do_entity<T>(&self, entity_id: usize, f: impl FnMut(&mut T)) 
+        where T: 'static 
+    {
+        assert!( entity_id < self.entity_count );
+
+        self.borrow_comp_vec::<T>()
+            .unwrap()
+            .borrow_mut()
+            .iter_mut()
+            .skip(entity_id)
+            .take(1)
+            .filter(|x| x.is_some())
+            .map(|x| x.as_mut().unwrap())
+            .for_each(f);
     }
 }
 

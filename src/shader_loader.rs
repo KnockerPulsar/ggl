@@ -11,6 +11,8 @@ impl ShaderLoader {
             shaders: HashMap::new(),
         };
 
+        shader_loader.load_shader("default","assets/shaders/textured.vert","assets/shaders/lit-textured.frag");
+
         for (program_name, vert_path, frag_path) in shaders {
             shader_loader.load_shader(program_name, vert_path, frag_path);
         }

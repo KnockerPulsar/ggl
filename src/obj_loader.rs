@@ -13,7 +13,7 @@ use crate::{
     egui_drawable::EguiDrawable,
     shader::ShaderProgram,
     shader_loader::ShaderLoader,
-    texture::{Texture2D, TextureType}, get_gl,
+    texture::{Texture2D, TextureType}, get_gl, transform::Transform,
 };
 
 use obj::Obj;
@@ -146,8 +146,25 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn load_model(path: &str, texture_loader: &mut TextureLoader) -> Self {
-        ObjLoader::load_obj(path, texture_loader)
+    pub fn load(path: &str, texture_loader: &mut TextureLoader) -> Self {
+        let mut loaded_model = ObjLoader::load_obj(path, texture_loader);
+
+        loaded_model
+            .add_texture(&Texture2D::from_handle(
+                    texture_loader.load_texture("default"),
+                    TextureType::Diffuse,
+            ))
+            .add_texture(&Texture2D::from_handle(
+                    texture_loader.load_texture("default"),
+                    TextureType::Specular,
+            ))
+            .add_texture(&Texture2D::from_handle(
+                    texture_loader.load_texture("default"),
+                    TextureType::Emissive,
+            ))
+            .with_shader_name("default");
+
+        loaded_model
     }
 
     pub fn with_shader_name(&mut self, shader_name: &str) -> &mut Self {
@@ -164,15 +181,18 @@ impl Model {
         &self.meshes[index]
     }
 
-    pub fn draw(&self, shader_loader: &mut ShaderLoader) {
+    pub fn draw(&self, shader_loader: &mut ShaderLoader, transform: &Transform) {
         // ! TODO: Add a default shader
 
         let gl_rc = get_gl();
 
         let shader_name = self.shader_name.as_ref().unwrap();
+
         let shader = shader_loader.borrow_shader(shader_name).unwrap();
 
         unsafe { gl_rc.use_program(Some(shader.handle)) };
+
+        shader.set_mat4("model", transform.get_model_matrix());
 
         for mesh in &self.meshes {
             mesh.draw(shader);

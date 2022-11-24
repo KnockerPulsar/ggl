@@ -12,14 +12,32 @@ impl TextureLoader {
             textures: HashMap::new(),
         };
 
+        println!(
+            "GL_RED = {:?}, GL_RGB = {:?}, GL_RGBA = {:?}",
+            glow::RED,
+            glow::RGB,
+            glow::RGBA
+        );
+
+        let (w, h) = (1i32, 1i32);
+        let pixel = vec![255u8, 0u8, 255u8];
+        let buffer: Vec<u8> = pixel
+            .iter()
+            .cycle()
+            .take(pixel.len() * w as usize * h as usize)
+            .map(|x| *x)
+            .collect();
+
+        assert!( buffer.len() == w as usize * h as usize * 3 );
 
         texture_loader
             .textures
             .insert(
                 "default".to_owned(), 
-                Self::from_data((1,1), 
-                    glow::RGB8, 
-                    &vec![255,0,255]
+                Self::from_data(
+                    (w, h), 
+                    glow::RGB, 
+                    &buffer
                 )
             );
 
@@ -70,9 +88,11 @@ impl TextureLoader {
         }
     }
 
-    pub fn load_into_handle(&self,  path: &str) -> glow::Texture {
-        dbg!(path);
-        let texture = image::io::Reader::open(path).unwrap().decode().unwrap();
+    pub fn load_into_handle(&self,  path: &str) -> Option<glow::Texture> {
+        let texture = match image::io::Reader::open(path) {
+            Ok(encoded_texture) => encoded_texture.decode().unwrap(),
+            Err(_) => return None,
+        };
 
         let texture_w = texture.width() as i32;
         let texture_h = texture.height() as i32;
@@ -86,36 +106,31 @@ impl TextureLoader {
             }
         };
 
-        if self.textures.is_empty() {
-            println!(
-                "GL_RED = {:?}, GL_RGB = {:?}, GL_RGBA = {:?}",
-                glow::RED,
-                glow::RGB,
-                glow::RGBA
-            );
-        }
-
-        println!("Loaded texture [{}] of format {:#?}", path, format,);
+        println!("Loaded texture [{}] of format {:#?}", path, format);
 
 
-        Self::from_data(
+        Some(Self::from_data(
             (texture_w, texture_h), 
             format,
             texture.as_bytes()
-        )
+        ))
     }
 
     pub fn load_texture(&mut self, path: &str) -> &glow::Texture {
         let path_string = String::from(path);
 
         if !self.textures.contains_key(path) {
-            self.textures
-                .insert(path_string, self.load_into_handle(path));
+            if let Some(texture_handle) = self.load_into_handle(path) {
+                self.textures.insert(path_string, texture_handle);
+            } 
         }
 
         match self.textures.get(path) {
             Some(tex) => tex,
-            None => self.textures.get("default").unwrap()
+            None => { 
+                println!("Failed to load texture at {path}, returning default texture");
+                self.textures.get("default").unwrap()
+            }
         }
     }
 }

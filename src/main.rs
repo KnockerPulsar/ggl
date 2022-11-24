@@ -1,4 +1,5 @@
-use glutin::event::{WindowEvent, VirtualKeyCode};
+use egui_glow::EguiGlow;
+use glutin::{event::{WindowEvent, VirtualKeyCode}, ContextWrapper};
 use std::env;
 
 mod asset_loader;
@@ -20,7 +21,6 @@ use crate::asset_loader::TextureLoader;
 use glow::HasContext;
 use obj_loader::Model;
 use scene::Scene;
-use texture::{Texture2D, TextureType};
 use ecs::Ecs;
 use input::InputSystem;
 use light_system::*;
@@ -29,6 +29,37 @@ use transform::Transform;
 use gl::{ set_gl, get_gl };
 
 use nalgebra_glm::*;
+
+
+fn render_system(
+    scene: &mut Scene,
+    mut shader_loader: &mut ShaderLoader,
+    mut ecs: &mut Ecs,
+    lights_on: &mut bool,
+) {
+    let view = scene.camera.get_view_matrix();
+
+    let lit_shader = shader_loader.borrow_shader("default").unwrap();
+
+    lit_shader.use_program();
+
+    light_system(&mut ecs, lit_shader, &lights_on);
+
+    lit_shader.set_vec3("u_view_pos", scene.camera.get_pos());
+    lit_shader.set_float("u_material.shininess", 32.0);
+    lit_shader.set_mat4("projection", scene.get_proj_matrix());
+    lit_shader.set_mat4("view", view);
+    lit_shader.set_vec3(
+        "u_material.emissive_factor",
+        vec3(0.1, 0.1, 0.1),
+    );
+
+    ecs.do_all::<Model, Transform>(|model, transform| {
+        model.draw(&mut shader_loader, &transform);
+    });
+
+
+}
 
 fn main() {
     let (window_width, window_height) = (1280, 720) as (i32, i32);
@@ -88,7 +119,6 @@ fn main() {
     ];
 
     let mut shader_loader = ShaderLoader::new(&shaders);
-
     let mut texture_loader = TextureLoader::new(&default_textures);
 
     let mut last_frame = std::time::Instant::now();
@@ -100,80 +130,58 @@ fn main() {
     let _model = ecs
         .add_entity()
         .with(Transform::new(
-            vec3(0.0, 0.0, -2.0),
-            Vec3::zeros(),
-            "model",
+                vec3(0.0, 0.0, -2.0),
+                Vec3::zeros(),
+                "model",
         ))
-        .with({
-            let mut model = Model::load_model("assets/obj/backpack.obj", &mut texture_loader);
-            model.with_shader_name("lit-textured");
+        .with(Model::load("assets/obj/cube.obj", &mut texture_loader));
 
-            model.add_texture(&Texture2D::from_handle(
-                texture_loader.load_texture("default"),
-                TextureType::Emissive,
-            ));
-
-            model
-        });
-    let mut lights_on = false;
-
+    let mut lights_on = true;
     unsafe {
         event_loop.run(
             move |event, _, control_flow: &mut glutin::event_loop::ControlFlow| {
                 let mut redraw = || {
                     gl_rc.enable(glow::DEPTH_TEST);
-
                     gl_rc.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+
 
                     // draw things behind egui here
                     let current_frame = std::time::Instant::now();
-
                     input.update((current_frame - last_frame).as_secs_f32());
                     scene.camera.update(&mut input);
 
-                    let view = scene.camera.get_view_matrix();
+                    render_system(&mut scene, &mut shader_loader, &mut ecs, &mut lights_on);
 
-                    let lit_shader = shader_loader.borrow_shader("lit-textured").unwrap();
-
-                    lit_shader.use_program();
 
                     egui_glow.run(window.window(), |egui_ctx| {
                         scene.entities_egui(&mut input, egui_ctx, &mut ecs);
-                        egui::Window::new("test").show(egui_ctx, |ui| {
-                            ui.checkbox(&mut lights_on, "Lights on?");
 
-                            light_system(&mut ecs, lit_shader, &lights_on);
+                        egui::Window::new("Global Light Toggle").show(egui_ctx, |ui| {
+                            ui.checkbox(&mut lights_on, "Lights on?");
+                        });
+
+                        
+                        egui::Window::new("Load Model").show(egui_ctx, |ui| {
+                            if ui.button("Load").clicked() {
+                                let path = rfd::FileDialog::new().add_filter("Object model", &["obj"]).pick_file(); 
+                                if let Some(path) = path {
+                                    let str_path = path.to_str().unwrap();
+                                    let mut transform = Transform::zeros();
+                                    transform.set_name(str_path);
+
+                                    ecs
+                                        .add_entity()
+                                        .with(transform)
+                                        .with(Model::load(str_path, &mut texture_loader));
+                                }
+                            }
                         });
                     });
 
-                    lit_shader.set_vec3("u_view_pos", scene.camera.get_pos());
-                    lit_shader.set_float("u_material.shininess", 32.0);
-                    lit_shader.set_mat4("projection", scene.get_proj_matrix());
-                    lit_shader.set_mat4("view", view);
-                    lit_shader.set_vec3(
-                        "u_material.emissive_factor",
-                        vec3(0.1, 0.1, 0.1),
-                    );
-
-                    let ts = ecs.borrow_comp_vec::<Transform>().unwrap();
-                    let mods = ecs.borrow_comp_vec::<Model>().unwrap();
-                    let mods_with_ts = mods.iter().zip(ts.iter());
-
-                    for (model, transform) in mods_with_ts {
-                        if let (Some(model), Some(transform)) = (model, transform) {
-                            shader_loader
-                                .borrow_shader("lit-textured")
-                                .unwrap()
-                                .set_mat4("model", transform.get_model_matrix());
-
-                            model.draw(&mut shader_loader);
-                        }
-                    }
 
                     egui_glow.paint(window.window());
 
                     // draw things on top of egui here
-
                     last_frame = current_frame;
                     input.frame_end();
 
