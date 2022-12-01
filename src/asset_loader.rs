@@ -2,16 +2,35 @@ use glow::HasContext;
 use std::collections::HashMap;
 use crate::get_gl;
 
+
+
+const DEFAULT_TEXTURES: [&str; 3] = [
+    "assets/textures/white.jpeg",
+    "assets/textures/black.jpg",
+    "assets/textures/grid.jpg"
+];
+
+
 pub struct TextureLoader {
     textures: HashMap<String, glow::Texture>,
 }
 
 impl TextureLoader {
-    pub fn new(default_textures: &[&str]) -> Self {
+    pub fn new() -> Self {
         let mut texture_loader = TextureLoader {
             textures: HashMap::new(),
         };
+        
+        texture_loader.setup_default_texture();
 
+        for path in DEFAULT_TEXTURES {
+            texture_loader.load_texture(path);
+        }
+
+        texture_loader
+    }
+
+    fn setup_default_texture(&mut self) {
         println!(
             "GL_RED = {:?}, GL_RGB = {:?}, GL_RGBA = {:?}",
             glow::RED,
@@ -24,14 +43,12 @@ impl TextureLoader {
         let buffer: Vec<u8> = pixel
             .iter()
             .cycle()
-            .take(pixel.len() * w as usize * h as usize)
-            .map(|x| *x)
+            .take(pixel.len() * w as usize * h as usize).copied()
             .collect();
 
         assert!( buffer.len() == w as usize * h as usize * 3 );
 
-        texture_loader
-            .textures
+        self.textures
             .insert(
                 "default".to_owned(), 
                 Self::from_data(
@@ -40,12 +57,6 @@ impl TextureLoader {
                     &buffer
                 )
             );
-
-        for path in default_textures {
-            texture_loader.load_texture(path);
-        }
-
-        texture_loader
     }
 
     pub fn from_data(
@@ -106,7 +117,15 @@ impl TextureLoader {
             }
         };
 
-        println!("Loaded texture [{}] of format {:#?}", path, format);
+        // TODO: Find a way to make this const or static (no need to construct it every time we
+        // call this function)
+        let int_to_texture_format: HashMap<u32, &'static str> = HashMap::from([
+            (glow::RED, "GL_RED"),
+            (glow::RGB, "GL_RGB"),
+            (glow::RGBA, "GL_RGBA")
+        ]);
+
+        println!("Loaded texture [{}] of format {:#?}", path, int_to_texture_format.get(&format).unwrap());
 
 
         Some(Self::from_data(

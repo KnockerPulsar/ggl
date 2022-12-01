@@ -1,6 +1,6 @@
 extern crate nalgebra_glm as glm;
 
-use egui::{Context, LayerId};
+use egui::{Context, LayerId, Ui};
 use egui_gizmo::{Gizmo, GizmoMode, GizmoOrientation};
 use glutin::dpi::PhysicalSize;
 
@@ -13,7 +13,7 @@ pub struct Scene {
     window_width: i32,
     window_height: i32,
 
-    gizmo_mode: GizmoMode,
+    pub gizmo_mode: GizmoMode,
 }
 
 impl Scene {
@@ -61,32 +61,18 @@ impl Scene {
 
     pub fn entities_egui(
         &mut self,
-        input: &mut InputSystem,
-        egui_ctx: &egui::Context,
+        ui: &mut Ui,
         ecs: &mut Ecs,
     ) {
-        let just_selected_entity = ecs.entity_list(egui_ctx, self.selected_entity); 
+        let just_selected_entity = ecs.entity_list(ui, self.selected_entity); 
         if just_selected_entity.is_some() {
             self.selected_entity = just_selected_entity;
-        }
-
-        self.selected_entity_gizmo(egui_ctx, ecs);
-
-        if input.is_down(glutin::event::VirtualKeyCode::T) {
-            self.gizmo_mode = GizmoMode::Translate;
-        }
-
-        if input.is_down(glutin::event::VirtualKeyCode::R) {
-            self.gizmo_mode = GizmoMode::Rotate;
-        }
-
-        if input.is_down(glutin::event::VirtualKeyCode::Y) {
-            self.gizmo_mode = GizmoMode::Scale;
         }
     }
 
     pub fn get_proj_matrix(&self) -> glm::Mat4 {
         glm::perspective(
+
             self.window_width as f32 / self.window_height as f32,
             self.camera.get_fov_euler().to_radians(),
             0.01,

@@ -39,7 +39,7 @@ impl Camera {
             // angles(0,0,0) looks at the x axis by default
             // angles(0, -90, 0) looks at the -z axis
             angles: *angle,
-            movement_speed: 2.5f32,
+            movement_speed: 10f32,
             mouse_sensitivity: 100f32,
             fov: 90f32,
         }
@@ -83,6 +83,7 @@ impl Camera {
                     Camera::get_camera_vectors(&self.world_up, &self.angles);
             }
         }
+
     }
 
     pub fn get_view_matrix(&self) -> Mat4 {

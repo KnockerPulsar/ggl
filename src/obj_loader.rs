@@ -6,7 +6,7 @@ use byteorder::{LittleEndian, WriteBytesExt};
 
 use glow::HasContext;
 use image::EncodableLayout;
-use std::{collections::HashSet, mem::size_of};
+use std::{collections::{HashSet,HashMap}, mem::size_of};
 
 use crate::{
     asset_loader::TextureLoader,
@@ -18,7 +18,44 @@ use crate::{
 
 use obj::Obj;
 
-pub struct ObjLoader;
+pub struct ObjLoader {
+    models: HashMap<String, Model>,
+}
+
+impl ObjLoader {
+    pub fn new() -> Self {
+        ObjLoader {
+            models: HashMap::new()
+        }
+    }
+
+    pub fn load(&mut self, path: &str, texture_loader: &mut TextureLoader) -> Option<ModelHandle> {
+        let path_string = String::from(path);
+
+        if !self.models.contains_key(path) {
+            self.models.insert(path_string.clone(), Model::load(path, texture_loader));
+        }
+
+        match self.models.get(path) {
+            Some(_) => Some(ModelHandle(path_string.clone())),
+            None => { 
+                println!("Failed to load model at {path}");
+                None
+            }
+        }
+    }
+
+    pub fn load_borrow(&mut self, path: &str, texture_loader: &mut TextureLoader) -> Option<&mut Model> {
+       match self.load(path, texture_loader) {
+           Some(model_handle) => Some(self.models.get_mut(&model_handle.0).unwrap()),
+           None => None
+       } 
+    }
+
+    pub fn borrow(&mut self, handle: &ModelHandle) -> Option<&mut Model> {
+       self.models.get_mut(&handle.0)
+    }
+}
 
 pub struct Mesh {
     // Buffer containing 3 floats for position, 3 for vertex normals, 2 for texture coordinates
@@ -91,7 +128,7 @@ impl Mesh {
                     }
                 }
 
-                // println!("{}{}", name, texture_number);
+                // println!("{:?}", self.textures[i as usize]);
                 gl_rc.bind_texture(glow::TEXTURE_2D, Some(self.textures[i as usize].handle));
                 shader.set_int(
                     &format!("u_material.{}{}", name, texture_number),
@@ -139,6 +176,17 @@ impl Mesh {
     }
 }
 
+#[derive(Clone, Default, Debug)]
+pub struct ModelHandle(pub String);
+
+impl EguiDrawable for ModelHandle {
+    fn on_egui(&mut self, ui: &mut egui::Ui, index: usize) -> bool {
+        ui.label(format!("Path: {}", self.0));
+
+        false
+    }
+}
+
 pub struct Model {
     pub meshes: Vec<Mesh>,
     pub shader_name: Option<String>,
@@ -146,23 +194,10 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn load(path: &str, texture_loader: &mut TextureLoader) -> Self {
+    fn load(path: &str, texture_loader: &mut TextureLoader) -> Self {
         let mut loaded_model = ObjLoader::load_obj(path, texture_loader);
 
-        loaded_model
-            .add_texture(&Texture2D::from_handle(
-                    texture_loader.load_texture("default"),
-                    TextureType::Diffuse,
-            ))
-            .add_texture(&Texture2D::from_handle(
-                    texture_loader.load_texture("default"),
-                    TextureType::Specular,
-            ))
-            .add_texture(&Texture2D::from_handle(
-                    texture_loader.load_texture("default"),
-                    TextureType::Emissive,
-            ))
-            .with_shader_name("default");
+        loaded_model.with_shader_name("default");
 
         loaded_model
     }
@@ -182,8 +217,6 @@ impl Model {
     }
 
     pub fn draw(&self, shader_loader: &mut ShaderLoader, transform: &Transform) {
-        // ! TODO: Add a default shader
-
         let gl_rc = get_gl();
 
         let shader_name = self.shader_name.as_ref().unwrap();

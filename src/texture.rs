@@ -1,5 +1,5 @@
-use crate::gl::get_gl;
-use glow::HasContext;
+
+
 
 // u32 -> Which slot the texture uses
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]

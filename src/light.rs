@@ -8,7 +8,7 @@ use crate::Transform;
 
 use egui::Ui;
 use nalgebra_glm::*;
-use tracing::enabled;
+
 
 macro_rules! shared_light_fn {
     () => {
@@ -38,6 +38,7 @@ pub trait Light {
     fn set_enabled(&mut self, enabled: &bool);
 }
 
+#[derive(Default, Clone)]
 pub struct LightColors {
     pub ambient: Vec3,
     pub diffuse: Vec3,
@@ -46,25 +47,37 @@ pub struct LightColors {
 
 impl LightColors {
     pub fn from_specular(spec: Vec3, dimming_factor: f32) -> Self {
+        assert!(dimming_factor < 1.0, "Dimming factor > 1.0! ({dimming_factor})");
         LightColors { 
             ambient: spec * dimming_factor * dimming_factor, 
             diffuse: spec * dimming_factor, 
             specular: spec 
         }
     }
+
+    pub fn no_ambient(spec: Vec3, dimming_factor: f32) -> Self {
+        LightColors { 
+            ambient: Vec3::zeros(),
+            diffuse: spec * dimming_factor, 
+            specular: spec 
+        }
+    }
 }
 
+#[derive(Default, Clone)]
 pub struct DirectionalLight {
     pub enabled: bool,
     pub colors: LightColors,
 }
 
+#[derive(Default, Clone)]
 pub struct PointLight {
     pub enabled: bool,
     pub colors: LightColors,
     pub attenuation_constants: Vec3,
 }
 
+#[derive(Default, Clone)]
 pub struct SpotLight {
     pub enabled: bool,
     pub cutoff_angles: Vec2, // Angles in degress, converted to cos(rad(angle)) on upload
@@ -201,30 +214,37 @@ impl EguiDrawable for LightColors {
     }
 }
 
+pub fn float3_slider(x: &mut f32, y: &mut f32, z: &mut f32, ui: &mut Ui) -> bool {
+    let mut fields_changed = false;
+    ui.horizontal(|ui| {
+        ui.scope(|ui| {
+            ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_RED;
+            fields_changed |= ui
+                .add(egui::DragValue::new(x).speed(0.01))
+                .changed();
+
+            ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_GREEN;
+            fields_changed |= ui
+                .add(egui::DragValue::new(y).speed(0.01))
+                .changed();
+
+            ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_BLUE;
+            fields_changed |= ui
+                .add(egui::DragValue::new(z).speed(0.01))
+                .changed();
+            })
+    });
+
+    fields_changed
+}
+
 impl EguiDrawable for Vec3 {
-    #[allow(unused_variables)]
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-        let mut fields_changed = false;
-        ui.horizontal(|ui| {
-            ui.scope(|ui| {
-                ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_RED;
-                fields_changed |= ui
-                    .add(egui::DragValue::new(&mut self.x).speed(0.01))
-                    .changed();
+    fn on_egui(&mut self, ui: &mut Ui, _index: usize) -> bool {
+        let (mut x, mut y, mut z) = (self.x, self.y, self.z);
+        let changed = float3_slider(&mut x, &mut y, &mut z, ui);
 
-                ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_GREEN;
-                fields_changed |= ui
-                    .add(egui::DragValue::new(&mut self.y).speed(0.01))
-                    .changed();
-
-                ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_BLUE;
-                fields_changed |= ui
-                    .add(egui::DragValue::new(&mut self.z).speed(0.01))
-                    .changed();
-                })
-        });
-
-        fields_changed
+        (self.x, self.y, self.z) = (x, y, z);
+        changed
     }
 }
 
@@ -255,7 +275,7 @@ macro_rules! enabled_header {
     ($self: ident, $ui: ident, $header_name: literal, $index: ident , $body: expr) => {
         let id = $ui.make_persistent_id(format!("{} {}", $header_name, $index));
 
-        egui::collapsing_header::CollapsingState::load_with_default_open($ui.ctx(), id, false)
+        egui::collapsing_header::CollapsingState::load_with_default_open($ui.ctx(), id, true)
             .show_header($ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(format!("{} {}", $header_name, $index));

@@ -34,14 +34,14 @@ pub fn light_system(ecs: &mut Ecs, lit_shader: &ShaderProgram, global_enable: &b
         lit_shader,
         ecs,
         "u_spot_lights",
-        &global_enable
+        global_enable
     );
 
     light_subsystem::<PointLight>(
         lit_shader,
         ecs,
         "u_point_lights",
-        &global_enable
+        global_enable
     );
 
 

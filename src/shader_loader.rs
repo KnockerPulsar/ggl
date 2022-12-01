@@ -6,14 +6,14 @@ pub struct ShaderLoader {
 }
 
 impl ShaderLoader {
-    pub fn new(shaders: &[(&str, &str, &str)]) -> Self {
+    pub fn new(custom_shaders: &[(&str, &str, &str)]) -> Self {
         let mut shader_loader = ShaderLoader {
             shaders: HashMap::new(),
         };
 
         shader_loader.load_shader("default","assets/shaders/textured.vert","assets/shaders/lit-textured.frag");
 
-        for (program_name, vert_path, frag_path) in shaders {
+        for (program_name, vert_path, frag_path) in custom_shaders {
             shader_loader.load_shader(program_name, vert_path, frag_path);
         }
 
