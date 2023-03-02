@@ -12,6 +12,7 @@ impl ShaderLoader {
         };
 
         shader_loader.load_shader("default","assets/shaders/textured.vert","assets/shaders/lit-textured.frag");
+        shader_loader.load_shader("default_billboard","assets/shaders/billboard_textured.vert","assets/shaders/simple.frag");
 
         for (program_name, vert_path, frag_path) in custom_shaders {
             shader_loader.load_shader(program_name, vert_path, frag_path);
@@ -27,6 +28,7 @@ impl ShaderLoader {
         frag_path: &str,
     ) -> &ShaderProgram {
         if !self.shaders.contains_key(program_name) {
+            println!("Loading shader ({program_name})");
             self.shaders.insert(
                 String::from(program_name),
                 ShaderProgram::new(vert_path, frag_path),

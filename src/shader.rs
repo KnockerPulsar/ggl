@@ -10,20 +10,23 @@ pub struct ShaderProgram {
 
 impl ShaderProgram {
     pub fn new(
-        vert_shader_path: &str,
-        frag_shader_path: &str,
+        vert_shader_path: impl Into<String>,
+        frag_shader_path: impl Into<String>,
     ) -> ShaderProgram {
 
-        let vert_shader_src = fs::read_to_string(vert_shader_path)
+        let vert_shader_path = vert_shader_path.into();
+        let frag_shader_path = frag_shader_path.into();
+
+        let vert_shader_src = fs::read_to_string(&vert_shader_path)
             .unwrap_or_else(|_| panic!(
                     "Failed to read vertex shader at {}",
                     vert_shader_path
             ));
 
-        let frag_shader_src = fs::read_to_string(frag_shader_path)
+        let frag_shader_src = fs::read_to_string(&frag_shader_path)
             .unwrap_or_else(|_| panic!(
                     "Failed to read fragment shader at {}",
-                    vert_shader_path
+                    frag_shader_path
             ));
 
         let vert_shader_handle = create_shader(&vert_shader_src, glow::VERTEX_SHADER);
@@ -32,6 +35,20 @@ impl ShaderProgram {
         let shader_program_handle =
             create_program(vert_shader_handle, frag_shader_handle);
 
+        unsafe {
+            let gl_rc = get_gl();
+            let num_uniforms = gl_rc.get_active_uniforms(shader_program_handle).min(8);
+            
+            if num_uniforms > 0 {
+                println!("Printing the first {num_uniforms} uniforms (max: 8): ");
+            }
+            for i in 0..num_uniforms {
+                let uni = gl_rc.get_active_uniform(shader_program_handle, i).unwrap();
+                println!("\tUniform name: {}", uni.name);
+            }
+        }
+
+        println!("Loaded shader program ({shader_program_handle:?}), vertex shader: \"{vert_shader_path}\", fragment shader: \"{frag_shader_path}\"");
         ShaderProgram {
             handle: shader_program_handle,
         }
@@ -49,7 +66,7 @@ impl ShaderProgram {
                 Some(program) => program,
                 None => {
                     panic!(
-                        "The requested uniform {} is not in the shader {:?}",
+                        "The requested uniform \"{}\" is not in the shader {:?}",
                         name, self.handle
                     );
                 }

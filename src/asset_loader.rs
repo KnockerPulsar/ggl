@@ -1,13 +1,15 @@
 use glow::HasContext;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 use crate::get_gl;
 
 
 
-const DEFAULT_TEXTURES: [&str; 3] = [
+const DEFAULT_TEXTURES: [&str; 5] = [
     "assets/textures/white.jpeg",
     "assets/textures/black.jpg",
-    "assets/textures/grid.jpg"
+    "assets/textures/grid.jpg",
+    "assets/textures/checker_32_32.jpg",
+    "assets/textures/point_light_white.png"
 ];
 
 
@@ -24,7 +26,7 @@ impl TextureLoader {
         texture_loader.setup_default_texture();
 
         for path in DEFAULT_TEXTURES {
-            texture_loader.load_texture(path);
+            texture_loader.load_texture(Path::new(path));
         }
 
         texture_loader
@@ -99,11 +101,9 @@ impl TextureLoader {
         }
     }
 
-    pub fn load_into_handle(&self,  path: &str) -> Option<glow::Texture> {
-        let texture = match image::io::Reader::open(path) {
-            Ok(encoded_texture) => encoded_texture.decode().unwrap(),
-            Err(_) => return None,
-        };
+    fn load_into_handle(&self, path: &Path) -> glow::Texture {
+        let path_string = path.to_str().unwrap();
+        let texture = image::io::Reader::open(path_string).unwrap().decode().unwrap();
 
         let texture_w = texture.width() as i32;
         let texture_h = texture.height() as i32;
@@ -125,29 +125,40 @@ impl TextureLoader {
             (glow::RGBA, "GL_RGBA")
         ]);
 
-        println!("Loaded texture [{}] of format {:#?}", path, int_to_texture_format.get(&format).unwrap());
+        println!("Loaded texture [{}] of format {:#?}", path_string, int_to_texture_format.get(&format).unwrap());
 
 
-        Some(Self::from_data(
+        Self::from_data(
             (texture_w, texture_h), 
             format,
             texture.as_bytes()
-        ))
+        )
     }
 
-    pub fn load_texture(&mut self, path: &str) -> &glow::Texture {
-        let path_string = String::from(path);
+    pub fn load_texture(&mut self, path: &Path) -> glow::Texture {
+        if path.exists() && path.is_file() {
+            let file_name = path.file_stem().unwrap().to_str().unwrap();
 
-        if !self.textures.contains_key(path) {
-            if let Some(texture_handle) = self.load_into_handle(path) {
-                self.textures.insert(path_string, texture_handle);
-            } 
+            if self.textures.contains_key(file_name) {
+                return *self.textures.get(file_name).unwrap()
+            }
+
+            let texture_handle = self.load_into_handle(path);
+            self.textures.insert(file_name.to_string(), texture_handle);
+
+            texture_handle
+        } else {
+            let texture_path = path.to_str().unwrap();
+            println!("Failed to load texture at {texture_path}, returning default texture");
+            *self.textures.get("default").unwrap()
         }
+    }
 
-        match self.textures.get(path) {
+    pub fn borrow(&mut self, file_name: &str) -> &glow::Texture {
+        match self.textures.get(file_name) {
             Some(tex) => tex,
             None => { 
-                println!("Failed to load texture at {path}, returning default texture");
+                println!("Failed to load the texture named {file_name}, returning default texture");
                 self.textures.get("default").unwrap()
             }
         }

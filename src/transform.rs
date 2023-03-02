@@ -1,11 +1,13 @@
 #![allow(dead_code)]
 
+use std::convert::identity;
+
 use crate::{egui_drawable::EguiDrawable, light::float3_slider};
 use egui::Ui;
 use glm::{Vec3, Mat4, vec3};
 use nalgebra_glm as glm;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Transform {
     pos: Vec3,
     rot: Degree3,
@@ -15,52 +17,39 @@ pub struct Transform {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct Degree3(pub f32, pub f32, pub f32);
+pub struct Degree3(pub Vec3);
+pub struct Radian3(pub Vec3);
+
 impl Degree3 {
-    pub fn to_radian(&self) -> Radian3 {
-        let rad: Vec<f32> = [self.0, self.1, self.2]
-            .iter_mut()
-            .map(|deg| deg.to_radians())
-            .collect();
-
-        Radian3(rad[0],rad[1], rad[2])
-    }
-
-    pub fn from_deg_vec(deg_vec: &Vec3) -> Degree3 {
-        Degree3(deg_vec.x, deg_vec.y, deg_vec.z)
-    }
-
     pub fn xyz(x: f32, y: f32, z: f32) -> Degree3 {
-        Degree3(x, y, z)
+        Degree3(vec3(x, y, z))
+    }
+}
+
+impl From<Vec3> for Degree3 {
+    fn from(value: Vec3) -> Self {
+        Degree3(value)
+    }
+}
+
+impl Into<Radian3> for Degree3 {
+    fn into(self) -> Radian3 {
+        Radian3(vec3(
+                self.0.x.to_radians(),
+                self.0.y.to_radians(),
+                self.0.z.to_radians(),
+        ))
     }
 }
 
 impl EguiDrawable for Degree3 {
     fn on_egui(&mut self, ui: &mut Ui, _index: usize) -> bool {
-        let Degree3(mut x, mut y, mut z) = self;
-        let changed = float3_slider(&mut x, &mut y, &mut z, ui);
-
-        *self = Degree3(x, y, z);
+        let changed = float3_slider(&mut self.0, ui);
         changed
     }
 }
 
-pub struct Radian3(f32, f32, f32);
-
 impl Transform {
-    #[allow(dead_code)]
-    pub fn zeros() -> Self {
-        let default_pos = glm::Vec3::zeros();
-        let default_rot = Degree3::default();
-        let default_scale = vec3(1., 1., 1.);
-        Transform {
-            pos: default_pos,
-            rot: default_rot,
-            scale: default_scale,
-            model: Transform::model_matrix(default_pos, default_rot, default_scale),
-            name: String::from(""),
-        }
-    }
 
     pub fn new(pos: Vec3, rot: Degree3, name: &str) -> Self {
         Self::with_scale(pos, rot, vec3(1., 1., 1.), name)
@@ -73,6 +62,13 @@ impl Transform {
             scale,
             model: Transform::model_matrix(pos, rot, scale),
             name: String::from(name),
+        }
+    }
+
+    pub fn with_name(name: impl Into<String>) -> Transform {
+        Transform {
+            name: name.into(),
+            ..Default::default()
         }
     }
 
@@ -91,18 +87,22 @@ impl Transform {
         self.update_model_matrix()
     }
 
-    pub fn set_rot(&mut self, euler: Vec3) -> &mut Self {
-        self.rot = Degree3::from_deg_vec(&euler);
+    pub fn set_rot(&mut self, euler: Degree3) -> &mut Self {
+        self.rot = euler.into();
         self.update_model_matrix()
     }
 
-    pub fn set_name(&mut self, n: &str) -> &mut Self {
-        self.name = String::from(n);
+    pub fn set_name(&mut self, n: impl Into<String>) -> &mut Self {
+        self.name = String::from(n.into());
         self
     }
 
     pub fn get_name(&self) -> &str {
         &self.name
+    }
+
+    pub fn get_pos(&self) -> &Vec3 {
+        &self.pos
     }
 
     pub fn get_model_matrix(&self) -> glm::Mat4 {
@@ -111,18 +111,14 @@ impl Transform {
 
     pub fn model_matrix(pos: Vec3, rot: Degree3, scl: Vec3) -> glm::Mat4 {
         let translation = glm::translate(&glm::Mat4::identity(), &pos);
-        let Radian3(rot_x, rot_y, rot_z) = rot.to_radian();
 
-        let rotation = glm::rotate_z(
-            &glm::rotate_y(
-                &glm::rotate_x(&translation, rot_x),
-                rot_y,
-            ),
-            rot_z,
-        );
-        let scale = glm::scale(&rotation, &scl);
+        let Radian3(rot) = rot.into();
+        let rot_x = glm::Mat4::from_euler_angles(rot.x, 0., 0.);
+        let rot_y = glm::Mat4::from_euler_angles(0., rot.y, 0.);
+        let rot_z = glm::Mat4::from_euler_angles(0., 0., rot.z);
+        let rotation = rot_z * rot_y * rot_x;
 
-        scale
+        translation * rotation * glm::scale(&rotation, &scl)
     }
 
     pub fn set_model(&mut self, mat: glm::Mat4) {
@@ -165,27 +161,65 @@ impl Transform {
             .atan2(rotation_submatrix[(1, 1)])
             .to_degrees();
 
-        Degree3::from_deg_vec(&rot)
+        rot.into()
+    }
+
+    pub fn face_camera(&mut self, camera: &crate::camera::Camera) {
+        let pos_diff = camera.get_pos() - self.pos;
+        // self.rot.0.y = (90. - f32::atan(pos_diff.z / pos_diff.x).to_degrees()) / 2.;
+
+        let dist = vec3(pos_diff.x, pos_diff.z, 0.).norm();
+        let sign = Vec3::dot(&pos_diff, &vec3(0., 0., 1.)).signum();
+        self.rot.0.x = (180. + f32::atan( sign * pos_diff.y / dist).to_degrees()) / 2.;
+
+        self.update_model_matrix(); 
     }
 }
 
 impl EguiDrawable for Transform {
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
 
-        let mut changed = false;
+        let header = egui::CollapsingHeader::new(format!("Transform - {}", &self.name)).show(ui, |ui| {
+            ui.columns(2, |columns| {
+                columns[0].vertical(|ui| {
+                    ui.label("Translation");
+                    ui.label("Rotation");
+                    ui.label("Scale");
+                });
 
-        egui::CollapsingHeader::new(format!("Transform - {}", &self.name)).show(ui, |ui| {
-            let pos_changed = self.pos.on_egui(ui, index);
-            let rot_changed = self.rot.on_egui(ui, index);
-            let scale_changed = self.scale.on_egui(ui, index);
+                let layout = egui::Layout::default();
+                columns[1].with_layout(layout, |ui| {
+                    ui.vertical(|ui| {
+                        let any_changed = [ 
+                            self.pos.on_egui(ui, index),
+                            self.rot.on_egui(ui, index),
+                            self.scale.on_egui(ui, index)
+                        ].iter().any(|changed| *changed);
 
-            changed = pos_changed || rot_changed || scale_changed;
-
-            if changed {
-                self.update_model_matrix();
-            }
+                        any_changed
+                    }).inner
+                }).inner
+            })
         });
 
+        let changed = header.body_returned.unwrap_or(false);
+        if changed { self.update_model_matrix(); }
+
         changed
+    }
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        let default_pos = glm::Vec3::zeros();
+        let default_rot = Degree3::default();
+        let default_scale = vec3(1., 1., 1.);
+        Transform {
+            pos: default_pos,
+            rot: default_rot,
+            scale: default_scale,
+            model: Transform::model_matrix(default_pos, default_rot, default_scale),
+            name: String::from(""),
+        }
     }
 }

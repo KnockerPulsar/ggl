@@ -1,16 +1,50 @@
+#![allow(dead_code)]
+
 extern crate nalgebra_glm as glm;
 
-use std::{cell::{RefCell, RefMut}, borrow::BorrowMut};
+use core::fmt;
+use std::{cell::{RefCell, RefMut}, borrow::BorrowMut, fmt::Display, convert::identity};
 use crate::{
     egui_drawable::EguiDrawable,
-    light::*,
-    transform::{Transform, Degree3},
-    obj_loader::{Model, ObjLoader, ModelHandle},
-    asset_loader::TextureLoader,
-    texture::Texture2D
+    transform::Transform,
+    light::*
 };
 use egui::Ui;
-use nalgebra_glm::{vec2, vec3, Vec3};
+
+macro_rules! addable_component_def {
+    ($($comp: ident),+) => {
+       #[derive(Debug, PartialEq, Clone, Copy)]
+       enum AddableComponent {
+          $(
+            $comp,
+          )+ 
+       }  
+
+       impl Display for AddableComponent {
+           fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+               fmt::Debug::fmt(self, f)
+           }
+       }
+    };
+}
+
+macro_rules! addable_components {
+    ($($comp: ident),+) => {
+        [$(AddableComponent::$comp),+] 
+    };
+}
+
+macro_rules! add_component {
+    ($self: ident, $comp_var: expr, $selected_entity: ident, [$($k:ident),*]) => {
+        match $comp_var {
+            $(
+                AddableComponent::$k => $self.add_comp_to_entity($selected_entity, $k::default()),
+            )*
+        };
+    };
+}
+
+addable_component_def!(Transform, PointLight, SpotLight, DirectionalLight);
 
 pub trait ComponentVec {
     fn as_any(&self) -> &dyn std::any::Any;
@@ -46,8 +80,9 @@ impl<T: 'static + EguiDrawable> ComponentVec for RefCell<Vec<Option<T>>> {
 }
 
 pub struct Ecs {
-    pub entity_count: usize,
+    entity_count: usize,
     pub component_vecs: Vec<Box<dyn ComponentVec>>,
+    component_to_add: AddableComponent
 }
 
 impl Ecs {
@@ -55,6 +90,7 @@ impl Ecs {
         Ecs {
             entity_count: 0,
             component_vecs: Vec::new(),
+            component_to_add: AddableComponent::Transform
         }
     }
 
@@ -83,16 +119,19 @@ impl Ecs {
                 .as_any_mut()
                     .downcast_mut::<RefCell<Vec<Option<ComponentType>>>>()
             {
-                comp_vec.get_mut()[entity] = Some(component);
+                match comp_vec.get_mut()[entity] {
+                    Some(_) => {
+                        let type_name = std::any::type_name::<ComponentType>();
+                        eprintln!("Attempted to add an duplicate component ({type_name}) onto entity ({entity})")
+                    },
+                    None => comp_vec.get_mut()[entity] = Some(component),
+                }
                 return self;
             }
         }
 
-        let mut new_comp_vec: Vec<Option<ComponentType>> = Vec::with_capacity(self.entity_count);
-
-        for _ in 0..self.entity_count {
-            new_comp_vec.push(None);
-        }
+        let mut new_comp_vec: Vec<Option<ComponentType>> = vec![None; self.entity_count];
+        new_comp_vec.fill(None);
 
         new_comp_vec[entity] = Some(component);
 
@@ -119,32 +158,49 @@ impl Ecs {
 
     pub fn entity_list(&mut self, ui: &mut Ui, selected_entity: Option<usize>) -> Option<usize> {
         let mut just_selected_entity = selected_entity;
-        
 
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
-                let transforms = self.borrow_comp_vec::<Transform>().unwrap();
-                for (entity_id, transform) in transforms.iter().enumerate() {
-                    if let Some(transform) = transform {
-                        if ui.button(transform.get_name()).clicked() {
-                            just_selected_entity = Some(entity_id);
-                        }
+                self.do_all_some::<Transform>(|(id, transform)| {
+                    if ui.button(transform.get_name()).clicked() {
+                        just_selected_entity = Some(id);
                     }
-                }
+                });
+
             });
 
             if let Some(selected_entity) = just_selected_entity {
-                let name = {
-                    let transforms = self.borrow_comp_vec::<Transform>().unwrap();
-                    transforms[selected_entity].as_ref().unwrap().get_name().to_string()
-                };
+                let name = self.do_entity::<Transform, String>(selected_entity, |t| {
+                    t.get_name().into()
+                });
 
                 ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        egui::ComboBox::from_label("Select one!")
+                            .selected_text(self.component_to_add.to_string())
+                            .show_ui(ui, |ui| {
+                                for addable_component in addable_components![Transform, PointLight, SpotLight, DirectionalLight] {
+                                    ui.selectable_value(&mut self.component_to_add, addable_component, addable_component.to_string());
+                                }
+                            });
+
+                        if ui.button("Add component").clicked() {
+                            add_component! {
+                                self, self.component_to_add, selected_entity,
+                                [Transform, PointLight, SpotLight, DirectionalLight]
+                            }
+                        }
+                    
+                    });
+
+                    ui.add_space(10.);
+
                     ui.label(egui::RichText::new(name).strong().underline());
 
                     for component_vector in &mut self.component_vecs {
                         component_vector.draw_egui(ui, selected_entity);
                     }
+
                 });
             }
         });
@@ -194,153 +250,40 @@ impl Ecs {
         self.do_n::<T,U>(f, 1);
     }
 
-    pub fn do_entity<T>(&self, entity_id: usize, f: impl FnMut(&mut T)) 
+    pub fn do_entity<T, U>(&self, entity_id: usize, mut f: impl (FnMut(&mut T) -> U)) -> U
         where T: 'static 
     {
         assert!( entity_id < self.entity_count );
 
+        let mut comp_vec = self.borrow_comp_vec::<T>()
+            .unwrap();
+
+        let mut comp = comp_vec
+            .borrow_mut()[entity_id]
+            .as_mut().unwrap();
+
+        f(&mut comp)
+    }
+
+    pub fn num_entities(&self) -> usize {
+       self.entity_count 
+    }
+
+    pub fn do_all_some<T>(&self, f: impl FnMut((usize, &mut T))) where T: 'static {
         self.borrow_comp_vec::<T>()
             .unwrap()
-            .borrow_mut()
             .iter_mut()
-            .skip(entity_id)
-            .take(1)
-            .filter_map(|x| x.as_mut())
+            .enumerate()
+            .filter_map(|(id, it)| {
+                match it {
+                    Some(it) => Some((id, it)),
+                    None => None,
+                }
+            })
             .for_each(f);
     }
 }
 
-impl Ecs {
-    pub fn light_test(texture_loader: &mut TextureLoader, object_loader: &mut ObjLoader) -> Self {
-        let mut ecs = Ecs::new();
-        let positions = [
-            vec3(5., 0., 5.),
-            vec3(-5., 0., -5.),
-            vec3(5., 0., -5.),
-            vec3(-5., 0., 5.),
-        ];
-
-        let cube_data: Vec<Transform> = positions
-            .iter()
-            .enumerate()
-            .map(|(index, pos)| {
-                Transform::new(*pos, Degree3::default(), &format!("cube {}", index))
-            })
-            .collect();
-
-        let up_two = vec3(0., 2., 0.);
-
-        let cube_path = "assets/obj/cube.obj";
-        let checker_path = "assets/textures/checker_32_32.jpg";
-        let white_path = "assets/textures/white.jpeg";
-
-        let cube_handle = {
-            let cube_handle = object_loader.load(cube_path, texture_loader).unwrap();
-
-            let cube_model = object_loader.borrow(&cube_handle).unwrap();
-            let checker_texture = texture_loader.load_into_handle(checker_path).unwrap();
-            let white = texture_loader.load_into_handle(white_path).unwrap();
-
-            cube_model.add_texture( &Texture2D { 
-                handle: checker_texture, 
-                tex_type: crate::texture::TextureType::Diffuse
-            }).add_texture( &Texture2D { 
-                handle: white,
-                tex_type: crate::texture::TextureType::Specular
-            });
-
-            cube_handle
-        };
-
-        let _spot0 = ecs
-            .add_entity()
-            .with(Transform::new(
-                    positions[2] + up_two,
-                    Degree3::xyz(0.0, 0.0, 0.),
-                    "Spotlight 0",
-            ))
-            .with(SpotLight {
-                enabled: true,
-                colors: LightColors::no_ambient(vec3(0., 3., 3.), 0.1),
-                attenuation_constants: vec3(0.1, 0.3, 0.),
-                cutoff_angles: vec2(10f32, 15f32),
-            });
-
-        let _spot1 = ecs
-            .add_entity()
-            .with(Transform::new(
-                    vec3(-3.4, 1.7, 3.7),
-                    Degree3::xyz(-70., -25., -50.),
-                    "Spotlight 1",
-            ))
-            .with(SpotLight {
-                enabled: true,
-                colors: LightColors::no_ambient(vec3(1., 1., 1.), 0.7),
-                attenuation_constants: vec3(0.1, 0.0, 1.0),
-                cutoff_angles: vec2(20., 30.),
-            });
-        
-        let _point0 = ecs
-            .add_entity()
-            .with(Transform::new(
-                    positions[0] + up_two,
-                    Degree3::default(),
-                    "Point light 0",
-            ))
-            .with(PointLight {
-                enabled: true,
-                colors:  LightColors::no_ambient(vec3(2., 0., 0.), 0.1),
-                attenuation_constants: vec3(0.2, 0.0, 0.5),
-            });
-        
-        let _point1 = ecs
-            .add_entity()
-            .with(Transform::new(
-                    positions[1] + up_two,
-                    Degree3::default(),
-                    "Point light 1",
-            ))
-            .with(PointLight {
-                enabled: true,
-                colors: LightColors::no_ambient(vec3(0., 1., 0.), 0.07),
-                attenuation_constants: vec3(0.1, 0.0, 1.0),
-            });
-        
-        // let _directional = ecs
-        //     .add_entity()
-        //     .with(Transform::new(
-        //             vec3(0.0, 0.0, 0.0),
-        //             Vec3::zeros(),
-        //             "Directional Light",
-        //     ))
-        //     .with(DirectionalLight {
-        //         enabled: true,
-        //         colors: LightColors::no_ambient(vec3(0., 1., 0.), 0.9),
-        //     });
-
-
-        let _ground = ecs
-            .add_entity()
-            .with(
-                Transform::with_scale(
-                    vec3(0., -2., 0.),
-                    Degree3::xyz(0., 0., 0.), 
-                    vec3(10., 1., 10.), 
-                    "ground"
-                )
-            ).with(cube_handle.clone());
-
-
-        for cube_transform in cube_data {
-            let _model = ecs
-                .add_entity()
-                .with(cube_transform)
-                .with(cube_handle.clone());
-            }
-
-        ecs
-    }
-}
 
 pub struct EntityBuilder<'a> {
     entity_id: usize,
@@ -348,7 +291,6 @@ pub struct EntityBuilder<'a> {
 }
 
 impl<'a> EntityBuilder<'a> {
-    #[allow(dead_code)]
     pub fn with_default<ComponentType>(&mut self) -> &mut Self 
         where ComponentType: 'static + Default + Clone + EguiDrawable
     {

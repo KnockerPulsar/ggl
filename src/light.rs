@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 extern crate nalgebra_glm as glm;
 
 use std::format;
@@ -62,6 +63,27 @@ impl LightColors {
             specular: spec 
         }
     }
+
+    pub fn ambient(&mut self, amb: Vec3) -> Self {
+        LightColors {
+            ambient: amb,
+            ..(*self)
+        }
+    }
+
+    pub fn diffuse(&mut self, diff: Vec3) -> Self {
+        LightColors {
+            diffuse: diff,
+            ..(*self)
+        }
+    }
+
+    pub fn specular(&mut self, spec: Vec3) -> Self {
+        LightColors {
+            specular: spec,
+            ..(*self)
+        }
+    }
 }
 
 #[derive(Default, Clone)]
@@ -70,7 +92,7 @@ pub struct DirectionalLight {
     pub colors: LightColors,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct PointLight {
     pub enabled: bool,
     pub colors: LightColors,
@@ -214,37 +236,33 @@ impl EguiDrawable for LightColors {
     }
 }
 
-pub fn float3_slider(x: &mut f32, y: &mut f32, z: &mut f32, ui: &mut Ui) -> bool {
-    let mut fields_changed = false;
-    ui.horizontal(|ui| {
-        ui.scope(|ui| {
-            ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_RED;
-            fields_changed |= ui
-                .add(egui::DragValue::new(x).speed(0.01))
-                .changed();
+pub fn float3_slider(float3: &mut Vec3, ui: &mut Ui) -> bool {
 
-            ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_GREEN;
-            fields_changed |= ui
-                .add(egui::DragValue::new(y).speed(0.01))
-                .changed();
+    use egui::Color32;
+    let colors = [Color32::LIGHT_RED, Color32::LIGHT_GREEN, Color32::LIGHT_BLUE];
 
-            ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_BLUE;
-            fields_changed |= ui
-                .add(egui::DragValue::new(z).speed(0.01))
-                .changed();
-            })
+
+    macro_rules! stroke_color {
+        ($ui: ident, $color: expr) => {
+            $ui.style_mut().visuals.widgets.inactive.fg_stroke.color = $color;
+        };
+    }
+
+    let any_changed = ui.horizontal(|ui| {
+        let changed = float3.iter_mut().zip(colors).map(|(float, color)| {
+            stroke_color!(ui, color);
+            ui.add(egui::DragValue::new(float).speed(0.01)).changed()
+        }).collect::<Vec<bool>>();
+
+        changed.iter().any(|b| *b)
     });
 
-    fields_changed
+    any_changed.inner
 }
 
 impl EguiDrawable for Vec3 {
     fn on_egui(&mut self, ui: &mut Ui, _index: usize) -> bool {
-        let (mut x, mut y, mut z) = (self.x, self.y, self.z);
-        let changed = float3_slider(&mut x, &mut y, &mut z, ui);
-
-        (self.x, self.y, self.z) = (x, y, z);
-        changed
+        float3_slider(self, ui)
     }
 }
 
@@ -307,6 +325,16 @@ impl EguiDrawable for SpotLight {
         });
         
         false
+    }
+}
+
+impl Default for PointLight {
+    fn default() -> Self {
+        PointLight { 
+            enabled: true, 
+            colors: LightColors::no_ambient(vec3(1., 1., 1.), 0.1), 
+            attenuation_constants: vec3(1., 1., 1.) 
+        }
     }
 }
 

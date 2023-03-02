@@ -1,8 +1,6 @@
 
-
-
-// u32 -> Which slot the texture uses
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[allow(dead_code)]
 pub enum TextureType {
     Diffuse,
     Specular,
@@ -22,5 +20,4 @@ impl Texture2D {
             tex_type,
         }
     }
-
 }
