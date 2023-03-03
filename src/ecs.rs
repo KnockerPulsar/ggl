@@ -3,7 +3,13 @@
 extern crate nalgebra_glm as glm;
 
 use core::fmt;
-use std::{cell::{RefCell, RefMut}, borrow::BorrowMut, fmt::Display, convert::identity};
+
+use std::{
+    cell::{RefCell, RefMut},
+    borrow::BorrowMut,
+    fmt::Display, convert::identity
+};
+
 use crate::{
     egui_drawable::EguiDrawable,
     transform::Transform,
@@ -44,7 +50,27 @@ macro_rules! add_component {
     };
 }
 
+macro_rules! type_vec_mut {
+    ($self: expr, $type: ty) => {
+        $self.as_any_mut().downcast_mut::<RefCell<CompVec<$type>>>()
+    }
+}
+
+macro_rules! type_vec_ref {
+    ($self: expr, $type: ty) => {
+        $self.as_any().downcast_ref::<RefCell<CompVec<$type>>>()
+    }
+}
+
+macro_rules! entity_comp {
+    ($comp_vec: ident, $entity_id: expr) => {
+        $comp_vec.get_mut()[$entity_id].as_mut()
+    }
+}
+
 addable_component_def!(Transform, PointLight, SpotLight, DirectionalLight);
+
+type CompVec<T> = Vec<Option<T>>;
 
 pub trait ComponentVec {
     fn as_any(&self) -> &dyn std::any::Any;
@@ -54,7 +80,7 @@ pub trait ComponentVec {
     fn draw_egui(&mut self, ui: &mut Ui, entity_id: usize);
 }
 
-impl<T: 'static + EguiDrawable> ComponentVec for RefCell<Vec<Option<T>>> {
+impl<T: 'static + EguiDrawable> ComponentVec for RefCell<CompVec<T>> {
     fn as_any(&self) -> &dyn std::any::Any {
         self as &dyn std::any::Any
     }
@@ -68,14 +94,10 @@ impl<T: 'static + EguiDrawable> ComponentVec for RefCell<Vec<Option<T>>> {
     }
 
     fn draw_egui(&mut self, ui: &mut Ui, entity_id: usize) {
-        if let Some(comp) = &mut self
-            .as_any_mut()
-                .downcast_mut::<RefCell<Vec<Option<T>>>>()
-                .unwrap()
-                .get_mut()[entity_id]
-        {
-            comp.on_egui(ui, entity_id);
-        }
+        let Some(comp_vec) = &mut type_vec_mut!(self, T) else { return; };
+        let Some(comp) = entity_comp!(comp_vec, entity_id) else { return };
+
+        comp.on_egui(ui, entity_id);
     }
 }
 
@@ -107,30 +129,26 @@ impl Ecs {
         }
     }
 
-    pub fn add_comp_to_entity<ComponentType>(
+    pub fn add_comp_to_entity<T>(
         &mut self,
         entity: usize,
-        component: ComponentType,
+        component: T,
     ) -> &mut Self 
-        where ComponentType: 'static + EguiDrawable + Clone 
+        where T: 'static + EguiDrawable + Clone 
     {
         for comp_vec in self.component_vecs.iter_mut() {
-            if let Some(comp_vec) = comp_vec
-                .as_any_mut()
-                    .downcast_mut::<RefCell<Vec<Option<ComponentType>>>>()
-            {
-                match comp_vec.get_mut()[entity] {
-                    Some(_) => {
-                        let type_name = std::any::type_name::<ComponentType>();
-                        eprintln!("Attempted to add an duplicate component ({type_name}) onto entity ({entity})")
-                    },
-                    None => comp_vec.get_mut()[entity] = Some(component),
-                }
-                return self;
+            let Some(comp_vec) = type_vec_mut!(comp_vec, T) else { continue; };
+
+            if entity_comp!(comp_vec, entity).is_some() {
+                let type_name = std::any::type_name::<T>();
+                eprintln!("Attempted to add an duplicate component ({type_name}) onto entity ({entity})")
             }
+
+            comp_vec.get_mut()[entity] = Some(component);
+            return self;
         }
 
-        let mut new_comp_vec: Vec<Option<ComponentType>> = vec![None; self.entity_count];
+        let mut new_comp_vec: Vec<Option<T>> = vec![None; self.entity_count];
         new_comp_vec.fill(None);
 
         new_comp_vec[entity] = Some(component);
@@ -141,14 +159,9 @@ impl Ecs {
         self
     }
 
-    pub fn borrow_comp_vec<ComponentType: 'static>(
-        &self,
-    ) -> Option<RefMut<Vec<Option<ComponentType>>>> {
+    pub fn borrow_comp_vec<T: 'static>( &self,) -> Option<RefMut<CompVec<T>>> {
         for comp_vec in self.component_vecs.iter() {
-            if let Some(comp_vec) = comp_vec
-                .as_any()
-                    .downcast_ref::<RefCell<Vec<Option<ComponentType>>>>()
-            {
+            if let Some(comp_vec) =  type_vec_ref!(comp_vec, T) {
                 return Some(comp_vec.borrow_mut());
             }
         }
@@ -156,78 +169,93 @@ impl Ecs {
         None
     }
 
-    pub fn entity_list(&mut self, ui: &mut Ui, selected_entity: Option<usize>) -> Option<usize> {
-        let mut just_selected_entity = selected_entity;
-
+    fn add_component_ui(&mut self, ui: &mut Ui, selected_entity: usize) {
+        const ADDABLE_COMPONENTS: [AddableComponent; 4] = addable_components![Transform, PointLight, SpotLight, DirectionalLight];
         ui.horizontal(|ui| {
+            
+            let combobox = egui::ComboBox::from_label("Select one!")
+                .selected_text(self.component_to_add.to_string());
+
+            // Changed component to be potentially added
+            combobox.show_ui(ui, |ui| {
+                ADDABLE_COMPONENTS.map(|comp| {
+                    ui.selectable_value(&mut self.component_to_add, comp, comp.to_string());
+                })
+            });
+
+            // Add the currently seleccted component type
+            if ui.button("Add component").clicked() {
+                add_component! {
+                    self, self.component_to_add, selected_entity,
+                    [Transform, PointLight, SpotLight, DirectionalLight]
+                }
+            }
+
+        });
+    }
+
+    /// Show a list of buttons where the label is the entity's name.
+    /// Returns Some(id) if an entity was clicked. None otherwise.
+    fn select_an_entity(&mut self, ui: &mut Ui) -> Option<usize> {
+        ui.vertical(|ui| {
+            let clicked = self.do_all_some::<Transform, usize>(|(id, transform)| {
+                if ui.button(transform.get_name()).clicked() {
+                    Some(id)
+                } else {
+                    None
+                }
+            });
+
+            // Shouldn't click more than one button
+            clicked.first().copied()
+        }).inner
+    }
+
+    pub fn entity_list(&mut self, ui: &mut Ui, prev_selected: Option<usize>) -> Option<usize> {
+        ui.horizontal(|ui| {
+            let new_selected = self.select_an_entity(ui);
+
+            let selection = match (new_selected, prev_selected) {
+                (None, None) => None,
+                (None, Some(_)) => prev_selected,
+                (Some(_), _) => new_selected,
+            }; 
+
+            let Some(selection) = selection else { return None; };
+
+            let name = self.do_entity::<Transform, String>(selection, |t| { t.get_name().into() });
+
+
+
             ui.vertical(|ui| {
-                self.do_all_some::<Transform>(|(id, transform)| {
-                    if ui.button(transform.get_name()).clicked() {
-                        just_selected_entity = Some(id);
-                    }
-                });
+
+                ui.vertical_centered(|ui| { ui.label(egui::RichText::new(name).strong().underline().size(20.)); });
+
+                ui.add_space(10.);
+
+
+                self.component_vecs
+                    .iter_mut()
+                    .for_each(|cv| cv.draw_egui(ui, selection));
+
+                ui.add_space(10.);
+
+                self.add_component_ui(ui, selection);
 
             });
 
-            if let Some(selected_entity) = just_selected_entity {
-                let name = self.do_entity::<Transform, String>(selected_entity, |t| {
-                    t.get_name().into()
-                });
-
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        egui::ComboBox::from_label("Select one!")
-                            .selected_text(self.component_to_add.to_string())
-                            .show_ui(ui, |ui| {
-                                for addable_component in addable_components![Transform, PointLight, SpotLight, DirectionalLight] {
-                                    ui.selectable_value(&mut self.component_to_add, addable_component, addable_component.to_string());
-                                }
-                            });
-
-                        if ui.button("Add component").clicked() {
-                            add_component! {
-                                self, self.component_to_add, selected_entity,
-                                [Transform, PointLight, SpotLight, DirectionalLight]
-                            }
-                        }
-                    
-                    });
-
-                    ui.add_space(10.);
-
-                    ui.label(egui::RichText::new(name).strong().underline());
-
-                    for component_vector in &mut self.component_vecs {
-                        component_vector.draw_egui(ui, selected_entity);
-                    }
-
-                });
-            }
-        });
-
-        just_selected_entity
+            Some(selection)
+        }).inner
     }
 
     pub fn do_n<T , U>(&self, mut f: impl FnMut(&mut T, &mut U), n: usize) 
         where T: 'static, U: 'static
     {
-        let t = self.borrow_comp_vec::<T>();
-        let u = self.borrow_comp_vec::<U>();
-
-        // if t.is_none() {
-        //     println!("do_all: Component type {:?} not found", std::any::type_name::<T>());
-        // }
-        //
-        // if u.is_none() {
-        //     println!("do_all: Component type {:?} not found", std::any::type_name::<U>());
-        // }
-
-        if t.is_none() || u.is_none() {
+        let (Some(mut t), Some(mut u)) = (self.borrow_comp_vec::<T>(), self.borrow_comp_vec::<U>()) else {
+            // use std::any::type_name;
+            // println!("do_all: Component type {:?} or {:?} not found", type_name::<T>(), type_name::<U>());
             return;
-        }
-
-        let mut t = t.unwrap();
-        let mut u = u.unwrap();
+        };
 
         t 
             .iter_mut()
@@ -236,7 +264,7 @@ impl Ecs {
             .map(|(x,y)| (x.as_mut().unwrap(), y.as_mut().unwrap()))
             .take(n)
             .for_each(|(x,y)| f(x, y));
-    }
+        }
 
     pub fn do_all<T , U>(&self, f: impl FnMut(&mut T, &mut U)) 
         where T: 'static, U: 'static 
@@ -266,10 +294,12 @@ impl Ecs {
     }
 
     pub fn num_entities(&self) -> usize {
-       self.entity_count 
+        self.entity_count 
     }
 
-    pub fn do_all_some<T>(&self, f: impl FnMut((usize, &mut T))) where T: 'static {
+
+    pub fn do_all_some<T, U>(&self, f: impl (FnMut((usize, &mut T))-> Option<U>)) -> Vec<U>
+        where T: 'static {
         self.borrow_comp_vec::<T>()
             .unwrap()
             .iter_mut()
@@ -280,7 +310,9 @@ impl Ecs {
                     None => None,
                 }
             })
-            .for_each(f);
+            .map(f)
+            .filter_map(identity)
+            .collect()
     }
 }
 
@@ -294,9 +326,7 @@ impl<'a> EntityBuilder<'a> {
     pub fn with_default<ComponentType>(&mut self) -> &mut Self 
         where ComponentType: 'static + Default + Clone + EguiDrawable
     {
-        self.ecs
-            .add_comp_to_entity::<ComponentType>(self.entity_id, ComponentType::default());
-
+        self.ecs .add_comp_to_entity(self.entity_id, ComponentType::default());
         self
     }
 
@@ -306,9 +336,7 @@ impl<'a> EntityBuilder<'a> {
     ) -> &mut Self 
         where ComponentType: 'static + Default + Clone + EguiDrawable
     {
-        self.ecs
-            .add_comp_to_entity::<ComponentType>(self.entity_id, comp);
-
+        self.ecs .add_comp_to_entity(self.entity_id, comp);
         self
     }
 
@@ -318,9 +346,8 @@ impl<'a> EntityBuilder<'a> {
     ) -> &mut Self 
         where ComponentType: 'static + Default + Clone + EguiDrawable
     {
-        self.ecs
-            .add_comp_to_entity::<ComponentType>(self.entity_id, comp.clone());
-
+        self.ecs .add_comp_to_entity(self.entity_id, comp.clone());
         self
     }
 }
+

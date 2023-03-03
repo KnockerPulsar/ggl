@@ -2,8 +2,7 @@ use glow::HasContext;
 use std::{collections::HashMap, path::Path};
 use crate::get_gl;
 
-
-
+const DEFAULT_TEXTURE: &'static str = "default";
 const DEFAULT_TEXTURES: [&str; 5] = [
     "assets/textures/white.jpeg",
     "assets/textures/black.jpg",
@@ -13,7 +12,21 @@ const DEFAULT_TEXTURES: [&str; 5] = [
 ];
 
 
+macro_rules! default_texture_getters {
+    ($( ($name: expr, $fn_name: tt) ),*) => {
+        $(
+            #[allow(dead_code)]
+            pub fn $fn_name(&self) -> glow::Texture {
+                self.borrow($name)
+            }
+        )*
+    };
+}
+
 pub struct TextureLoader {
+    /// Maps from the texture's name to its native handle
+    /// Note that the native handle does not specify the type of this texture (Diffuse, Specular,
+    /// Emissive, etc...)
     textures: HashMap<String, glow::Texture>,
 }
 
@@ -52,7 +65,7 @@ impl TextureLoader {
 
         self.textures
             .insert(
-                "default".to_owned(), 
+                DEFAULT_TEXTURE.to_owned(), 
                 Self::from_data(
                     (w, h), 
                     glow::RGB, 
@@ -61,7 +74,7 @@ impl TextureLoader {
             );
     }
 
-    pub fn from_data(
+    fn from_data(
         (texture_w, texture_h): (i32, i32), 
         format: u32, 
         texture_data: &[u8], 
@@ -101,6 +114,8 @@ impl TextureLoader {
         }
     }
 
+    /// Usually used when loading a texture for the first time.
+    /// This mostly occurs when loading a mesh for example.
     fn load_into_handle(&self, path: &Path) -> glow::Texture {
         let path_string = path.to_str().unwrap();
         let texture = image::io::Reader::open(path_string).unwrap().decode().unwrap();
@@ -135,6 +150,9 @@ impl TextureLoader {
         )
     }
 
+    /// Used when we want to make sure a texture is loaded at most one time.
+    /// If the user attempt to load it again, it will return the already loaded instance.
+    /// Returns a fallback/default texture if the given texture path does not exist.
     pub fn load_texture(&mut self, path: &Path) -> glow::Texture {
         if path.exists() && path.is_file() {
             let file_name = path.file_stem().unwrap().to_str().unwrap();
@@ -149,18 +167,29 @@ impl TextureLoader {
             texture_handle
         } else {
             let texture_path = path.to_str().unwrap();
-            println!("Failed to load texture at {texture_path}, returning default texture");
-            *self.textures.get("default").unwrap()
+            println!("Failed to load texture at {texture_path}, returning error texture");
+            self.default_texture()
         }
     }
 
-    pub fn borrow(&mut self, file_name: &str) -> &glow::Texture {
+    /// Borrows a texture given its name.
+    /// The name is the file name WITHOUT its extension, for example: `path/to/img.png`.
+    /// Here `img` is the string that should be passed to the function.
+    pub fn borrow(&self, file_name: &str) -> glow::Texture {
         match self.textures.get(file_name) {
-            Some(tex) => tex,
+            Some(tex) => *tex,
             None => { 
-                println!("Failed to load the texture named {file_name}, returning default texture");
-                self.textures.get("default").unwrap()
+                println!("Failed to load the texture named {file_name}, returning error texture");
+                self.default_texture()
             }
         }
     }
+
+    default_texture_getters![ 
+        (DEFAULT_TEXTURE, default_texture),
+        ("checker_32_32", checker_texture),
+        ("white", white_texture),
+        ("black", black_texture),
+        ("point_light_white", point_light_texture)
+    ];
 }

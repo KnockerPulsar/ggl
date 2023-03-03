@@ -1,18 +1,20 @@
-mod asset_loader;
+mod loaders;
+
 mod camera;
 mod ecs;
 mod egui_drawable;
 mod input;
 mod light;
 mod light_system;
-mod obj_loader;
 mod scene;
 mod shader;
-mod shader_loader;
 mod texture;
 mod transform;
 mod app;
 mod gl;
+
+mod model;
+mod mesh;
 
 use app::App;
 use scene::Scene;
@@ -28,6 +30,7 @@ fn main() {
 
     let (texture_loader, object_loader) = app.get_resource_managers();
     let  scene = Scene::light_test(window_width as i32, window_height as i32, texture_loader, object_loader);
+
     app.set_scene(scene);
     
     event_loop.run(move |event, _, control_flow| {

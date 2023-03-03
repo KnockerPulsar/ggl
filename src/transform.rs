@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 
-use std::convert::identity;
-
 use crate::{egui_drawable::EguiDrawable, light::float3_slider};
+
 use egui::Ui;
 use glm::{Vec3, Mat4, vec3};
 use nalgebra_glm as glm;

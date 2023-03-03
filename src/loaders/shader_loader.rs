@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use crate::shader::ShaderProgram;
 
+pub const DEFAULT_SHADER: &'static str= "default";
+pub const DEFAULT_BILLBOARD_SHADER: &'static str= "default_billboard";
+
 pub struct ShaderLoader {
     shaders: HashMap<String, ShaderProgram>,
 }
@@ -11,8 +14,8 @@ impl ShaderLoader {
             shaders: HashMap::new(),
         };
 
-        shader_loader.load_shader("default","assets/shaders/textured.vert","assets/shaders/lit-textured.frag");
-        shader_loader.load_shader("default_billboard","assets/shaders/billboard_textured.vert","assets/shaders/simple.frag");
+        shader_loader.load_shader(DEFAULT_SHADER,"assets/shaders/textured.vert","assets/shaders/lit-textured.frag");
+        shader_loader.load_shader(DEFAULT_BILLBOARD_SHADER,"assets/shaders/billboard_textured.vert","assets/shaders/simple.frag");
 
         for (program_name, vert_path, frag_path) in custom_shaders {
             shader_loader.load_shader(program_name, vert_path, frag_path);
@@ -26,16 +29,16 @@ impl ShaderLoader {
         program_name: &str,
         vert_path: &str,
         frag_path: &str,
-    ) -> &ShaderProgram {
+    ) {
         if !self.shaders.contains_key(program_name) {
             println!("Loading shader ({program_name})");
-            self.shaders.insert(
-                String::from(program_name),
-                ShaderProgram::new(vert_path, frag_path),
-            );
-        }
 
-        self.shaders.get(program_name).unwrap()
+            let shader = ShaderProgram::new(vert_path, frag_path);
+            match shader {
+                Ok(shader) => { self.shaders.insert(String::from(program_name), shader); } ,
+                Err(err) => eprintln!("Failed to load shader: {}", err),
+            };
+        }
     }
 
     pub fn borrow_shader(&self, program_name: &str) -> Option<&ShaderProgram> {

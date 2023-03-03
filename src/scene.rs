@@ -1,7 +1,5 @@
 extern crate nalgebra_glm as glm;
 
-use std::path::Path;
-
 use egui::{Context, LayerId, Ui};
 use egui_gizmo::{Gizmo, GizmoMode, GizmoOrientation};
 use glm::{vec3, vec2, Vec3};
@@ -11,15 +9,8 @@ use crate::{
     camera::Camera,
     ecs::Ecs,
     transform::{Transform, Degree3},
-    asset_loader::TextureLoader,
-    obj_loader::ObjLoader,
-    texture::{Texture2D, TextureType},
-    light::{
-        SpotLight,
-        LightColors,
-        PointLight,
-        DirectionalLight
-    }
+    light::*,
+    loaders::*,
 };
 
 pub struct Scene {
@@ -43,8 +34,8 @@ impl Scene {
     pub fn light_test(
         window_width: i32, 
         window_height: i32,
-        texture_loader: &mut TextureLoader, 
-        object_loader: &mut ObjLoader
+        _texture_loader: &mut TextureLoader, 
+        _object_loader: &mut ObjLoader
     ) -> Self {
 
         let mut ecs = Ecs::new();
@@ -63,8 +54,7 @@ impl Scene {
             })
             .collect();
 
-        let up_two = vec3(0., 2., 0.);
-        let cube_handle = object_loader.load("default_cube", texture_loader).unwrap();
+        let _up_two = vec3(0., 2., 0.);
 
         // let _spot0 = ecs
         //     .add_entity()
@@ -142,14 +132,14 @@ impl Scene {
                     vec3(10., 1., 10.), 
                     "ground"
                 )
-            ).with(cube_handle.clone());
+            ).with::<ModelHandle>(DEFAULT_CUBE_NAME.into());
 
 
         for cube_transform in cube_data {
             let _model = ecs
                 .add_entity()
                 .with(cube_transform)
-                .with(cube_handle.clone());
+                .with::<ModelHandle>(DEFAULT_CUBE_NAME.into());
             }
 
         let cam = Camera::new(
@@ -159,8 +149,10 @@ impl Scene {
             window_width as f32 / window_height as f32
         );
 
-        let square_handle =  object_loader.load("default_square", texture_loader).unwrap();
-        let _billboard_test = ecs.add_entity().with_default::<Transform>().with(square_handle.clone());
+        let _billboard_test = ecs
+            .add_entity()
+            .with_default::<Transform>()
+            .with::<ModelHandle>(DEFAULT_PLANE_NAME.into());
 
         Scene {
             selected_entity: None,
@@ -171,30 +163,34 @@ impl Scene {
 
     }
 
-    pub fn selected_entity_gizmo(&mut self, egui_ctx: &Context) {
-        egui::Area::new("Gizmo")
-            .fixed_pos((0.0, 0.0))
-            .show(egui_ctx, |ui| {
-                // Draw the gizmo in the background
-                ui.with_layer_id(LayerId::background(), |ui| {
-                    // If we have a selected entity
-                    if let Some(eid) = self.selected_entity {
-                        // If the entity has a transform
-                        self.ecs.do_entity(eid, |selected_entity_transform: &mut Transform| {
-                            let gizmo = Gizmo::new("My gizmo")
-                                .view_matrix(self.camera.get_view_matrix())
-                                .projection_matrix(self.camera.get_proj_matrix())
-                                .model_matrix(selected_entity_transform.get_model_matrix())
-                                .mode(self.gizmo_mode)
-                                .orientation(GizmoOrientation::Local);
+    fn draw_gizmo(&mut self, eid: usize, ui: &mut egui::Ui) {
+        self.ecs.do_entity(eid, |selected_entity_transform: &mut Transform| {
+            let gizmo = Gizmo::new("My gizmo")
+                .view_matrix(self.camera.get_view_matrix())
+                .projection_matrix(self.camera.get_proj_matrix())
+                .model_matrix(selected_entity_transform.get_model_matrix())
+                .mode(self.gizmo_mode)
+                .orientation(GizmoOrientation::Local);
 
-                            if let Some(response) = gizmo.interact(ui) {
-                                selected_entity_transform.set_model(response.transform.into());
-                            }
-                        })
-                    }
-                })
-            });
+            if let Some(response) = gizmo.interact(ui) {
+                selected_entity_transform.set_model(response.transform.into());
+            }
+        })
+
+    }
+
+    pub fn selected_entity_gizmo(&mut self, egui_ctx: &Context) {
+        let area = egui::Area::new("Gizmo");
+        
+        area.show(egui_ctx, |ui| {
+            // Needed for the gizmo to respond to inputs
+            ui.with_layer_id(LayerId::background(), |ui| {
+
+                let Some(eid) = self.selected_entity else { return; };
+                self.draw_gizmo(eid, ui);
+
+            })
+        });
     }
 
     pub fn entities_egui(

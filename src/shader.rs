@@ -1,6 +1,9 @@
 use glow::*;
 use nalgebra_glm as glm;
-use std::fs;
+use std::{
+    fs,
+    error::Error
+};
 
 use crate::get_gl;
 
@@ -12,28 +15,20 @@ impl ShaderProgram {
     pub fn new(
         vert_shader_path: impl Into<String>,
         frag_shader_path: impl Into<String>,
-    ) -> ShaderProgram {
+    ) -> Result<ShaderProgram, Box<dyn Error>> {
 
         let vert_shader_path = vert_shader_path.into();
         let frag_shader_path = frag_shader_path.into();
 
-        let vert_shader_src = fs::read_to_string(&vert_shader_path)
-            .unwrap_or_else(|_| panic!(
-                    "Failed to read vertex shader at {}",
-                    vert_shader_path
-            ));
+        let vert_shader_src = fs::read_to_string(&vert_shader_path)?;
+        let frag_shader_src = fs::read_to_string(&frag_shader_path)?;
 
-        let frag_shader_src = fs::read_to_string(&frag_shader_path)
-            .unwrap_or_else(|_| panic!(
-                    "Failed to read fragment shader at {}",
-                    frag_shader_path
-            ));
 
-        let vert_shader_handle = create_shader(&vert_shader_src, glow::VERTEX_SHADER);
-        let frag_shader_handle = create_shader(&frag_shader_src, glow::FRAGMENT_SHADER);
+        let vert_shader_handle = create_shader(&vert_shader_src, glow::VERTEX_SHADER)?;
+        let frag_shader_handle = create_shader(&frag_shader_src, glow::FRAGMENT_SHADER)?;
 
         let shader_program_handle =
-            create_program(vert_shader_handle, frag_shader_handle);
+            create_program(vert_shader_handle, frag_shader_handle)?;
 
         unsafe {
             let gl_rc = get_gl();
@@ -49,9 +44,9 @@ impl ShaderProgram {
         }
 
         println!("Loaded shader program ({shader_program_handle:?}), vertex shader: \"{vert_shader_path}\", fragment shader: \"{frag_shader_path}\"");
-        ShaderProgram {
+        Ok(ShaderProgram {
             handle: shader_program_handle,
-        }
+        })
     }
 
     pub fn use_program(&self) {
@@ -127,10 +122,10 @@ impl ShaderProgram {
     }
 }
 
-fn create_shader(shader_src: &str, shader_type: u32) -> glow::Shader {
+fn create_shader(shader_src: &str, shader_type: u32) -> Result<glow::Shader, String> {
     unsafe {
         let gl = get_gl();
-        let shader_handle = gl.create_shader(shader_type).unwrap();
+        let shader_handle = gl.create_shader(shader_type)?;
 
         gl.shader_source(shader_handle, shader_src);
         gl.compile_shader(shader_handle);
@@ -138,11 +133,9 @@ fn create_shader(shader_src: &str, shader_type: u32) -> glow::Shader {
         let success = gl.get_shader_compile_status(shader_handle);
 
         if !success {
-            let error_string = gl.get_shader_info_log(shader_handle);
-
-            panic!("{}", error_string);
+            Err(gl.get_shader_info_log(shader_handle))
         } else {
-            shader_handle
+            Ok(shader_handle)
         }
     }
 }
@@ -150,22 +143,23 @@ fn create_shader(shader_src: &str, shader_type: u32) -> glow::Shader {
 fn create_program(
     vert_shader_handle: glow::Shader,
     frag_shader_handle: glow::Shader,
-) -> glow::Program {
+) -> Result<glow::Program , String> {
     unsafe {
         let gl = get_gl();
-        let shader_program_handle = gl.create_program().unwrap();
+        let shader_program_handle = gl.create_program()?;
+
         gl.attach_shader(shader_program_handle, vert_shader_handle);
         gl.attach_shader(shader_program_handle, frag_shader_handle);
+
         gl.link_program(shader_program_handle);
 
         let success = gl.get_program_link_status(shader_program_handle);
         if !success {
-            let error_string = gl.get_program_info_log(shader_program_handle);
-            panic!("{}", error_string);
+            Err(gl.get_program_info_log(shader_program_handle))
         } else {
             gl.delete_shader(vert_shader_handle);
             gl.delete_shader(frag_shader_handle);
-            shader_program_handle
+            Ok(shader_program_handle)
         }
     }
 }

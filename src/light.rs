@@ -23,6 +23,29 @@ macro_rules! shared_light_fn {
     };
 }
 
+#[macro_export]
+macro_rules! enabled_header {
+    ($self: ident, $ui: ident, $header_name: literal, $index: ident , $body: expr) => {
+        let id = $ui.make_persistent_id(format!("{} {}", $header_name, $index));
+
+        egui::collapsing_header::CollapsingState::load_with_default_open($ui.ctx(), id, true)
+            .show_header($ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(format!("{} {}", $header_name, $index));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
+                        ui.checkbox(&mut $self.enabled, "");
+                    });
+                });
+            })
+        .body( |$ui| {
+            if $self.enabled {
+                $body
+            }
+        });
+    };
+}
+
+
 pub trait Light {
     fn upload_data(
         &self,
@@ -289,27 +312,6 @@ impl EguiDrawable for Vec2 {
     }
 }
 
-macro_rules! enabled_header {
-    ($self: ident, $ui: ident, $header_name: literal, $index: ident , $body: expr) => {
-        let id = $ui.make_persistent_id(format!("{} {}", $header_name, $index));
-
-        egui::collapsing_header::CollapsingState::load_with_default_open($ui.ctx(), id, true)
-            .show_header($ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(format!("{} {}", $header_name, $index));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
-                        ui.checkbox(&mut $self.enabled, "");
-                    });
-                });
-            })
-        .body( |$ui| {
-            if $self.enabled {
-                $body
-            }
-        });
-    };
-}
-
 impl EguiDrawable for SpotLight {
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
 
@@ -321,7 +323,6 @@ impl EguiDrawable for SpotLight {
             self.attenuation_constants.on_egui(ui, index);
 
             self.colors.on_egui(ui, index);
-
         });
         
         false

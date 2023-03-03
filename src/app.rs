@@ -4,9 +4,24 @@ use egui_gizmo::GizmoMode;
 use glow::HasContext;
 use glutin::{event::{WindowEvent, VirtualKeyCode, Event}, event_loop::ControlFlow};
 
-use crate::{gl::{set_gl, get_gl}, scene::Scene, shader_loader::ShaderLoader, asset_loader::TextureLoader, obj_loader::{ObjLoader, ModelHandle, ModelType}, input::InputSystem, transform::Transform, light_system};
+use crate::{
+    loaders::*,
+    gl::{set_gl, get_gl},
+    scene::Scene,
+    model::ModelType,
+    input::InputSystem,
+    transform::Transform,
+    light_system
+};
 
 type GlutinWindow = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
+
+#[derive(Default, PartialEq)]
+enum Panels {
+    #[default]
+    Entities,
+    Models,
+}
 
 pub struct App {
     window_width: i32,
@@ -23,7 +38,8 @@ pub struct App {
     input: InputSystem,
 
     last_frame: std::time::Instant,
-    lights_on: bool
+    lights_on: bool,
+    current_panel: Panels
 }
 
 impl App {
@@ -72,7 +88,8 @@ impl App {
             input,
 
             last_frame,
-            lights_on: true 
+            lights_on: true,
+            current_panel: Panels::Entities
         };
 
         (app, event_loop)
@@ -122,65 +139,90 @@ impl App {
 
         self.glow.run(self.window.window(), |egui_ctx| {
             egui::Window::new("ggl").show(egui_ctx, |ui| {
-
-                if let Some(current_scene) = &mut self.current_scene {
-                    ui.spacing();
-                    ui.heading("Entities");
-
-                    ui.group(|ui| {
-                        current_scene.entities_egui(ui);
-                        if ui.button("New Empty Entity").clicked() {
-                            new_entity = true;
-                        }
-                    });
-
-                    current_scene.selected_entity_gizmo(egui_ctx);
-
-                    if self.input.is_down(glutin::event::VirtualKeyCode::T) {
-                        current_scene.gizmo_mode = GizmoMode::Translate;
-                    }
-
-                    if self.input.is_down(glutin::event::VirtualKeyCode::R) {
-                        current_scene.gizmo_mode = GizmoMode::Rotate;
-                    }
-
-                    if self.input.is_down(glutin::event::VirtualKeyCode::Y) {
-                        current_scene.gizmo_mode = GizmoMode::Scale;
-                    }
-                }
-
-                ui.spacing();
-                ui.heading("Global light toggle");
-
-                ui.group(|ui| {
-                    ui.checkbox(&mut self.lights_on, "Lights on?");
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.current_panel, Panels::Entities, "Entities");
+                    ui.selectable_value(&mut self.current_panel, Panels::Models, "Models");
                 });
 
-                ui.spacing();
-                ui.heading("Load models");
 
-                ui.group(|ui| {
-                    if ui.button("Load").clicked() {
-
-                        if self.current_scene.is_none() {
-                            self.current_scene = Some(Scene::empty(self.window_width, self.window_height));
-                            println!("Created new empty scene");
-                        }
-
+                match self.current_panel {
+                    Panels::Entities => {
                         if let Some(current_scene) = &mut self.current_scene {
-                            let path = rfd::FileDialog::new().add_filter("Object model", &["obj"]).pick_file(); 
-                            if let Some(path) = path {
-                                let str_path = path.to_str().unwrap();
-                                let transform = Transform::with_name(str_path);
+                            ui.spacing();
+                            ui.heading("Entities");
 
-                                current_scene.ecs
-                                    .add_entity()
-                                    .with(transform)
-                                    .with(self.object_loader.load(str_path, &mut self.texture_loader).unwrap());
+                            ui.group(|ui| {
+                                current_scene.entities_egui(ui);
+                                if ui.button("New Empty Entity").clicked() {
+                                    new_entity = true;
+                                }
+                            });
+
+                            current_scene.selected_entity_gizmo(egui_ctx);
+
+                            if self.input.is_down(glutin::event::VirtualKeyCode::T) {
+                                current_scene.gizmo_mode = GizmoMode::Translate;
+                            }
+
+                            if self.input.is_down(glutin::event::VirtualKeyCode::R) {
+                                current_scene.gizmo_mode = GizmoMode::Rotate;
+                            }
+
+                            if self.input.is_down(glutin::event::VirtualKeyCode::Y) {
+                                current_scene.gizmo_mode = GizmoMode::Scale;
                             }
                         }
+
+                        ui.spacing();
+                        ui.heading("Global light toggle");
+
+                        ui.group(|ui| {
+                            ui.checkbox(&mut self.lights_on, "Lights on?");
+                        });
+
+                        ui.spacing();
+
+                    }, 
+                    Panels::Models => {
+                        ui.vertical_centered(|ui| {
+                            ui.group(|ui|{
+
+                                ui.heading("Loaded Models");
+
+                                self.object_loader.models().iter().for_each(|(name, model)| {
+                                    ui.label(format!("{name}"));
+                                });
+
+                            });
+
+
+                            ui.heading("Load models");
+                            ui.group(|ui| {
+                                if ui.button("Load").clicked() {
+
+                                    if self.current_scene.is_none() {
+                                        self.current_scene = Some(Scene::empty(self.window_width, self.window_height));
+                                        println!("Created new empty scene");
+                                    }
+
+                                    if let Some(current_scene) = &mut self.current_scene {
+                                        let path = rfd::FileDialog::new().add_filter("Object model", &["obj"]).pick_file(); 
+                                        if let Some(path) = path {
+                                            let str_path = path.to_str().unwrap();
+                                            let transform = Transform::with_name(str_path);
+
+                                            let loaded_model = self.object_loader.load(str_path, &mut self.texture_loader);
+                                            match loaded_model {
+                                                Ok(_) => { current_scene.ecs.add_entity().with(transform).with::<ModelHandle>(str_path.into()); },
+                                                Err(_) => eprintln!("Failed to load model at \"{str_path}\""),
+                                            };
+                                        }
+                                    }
+                                }
+                            });
+                        });
                     }
-                });
+                };
             });
         });
 
@@ -274,7 +316,16 @@ impl App {
 
                 if let Some(current_scene) = &mut self.current_scene {
                     current_scene.camera.update(&mut self.input);
+
+
+                    current_scene.ecs.do_all_some::<ModelHandle, ()>(|(_id, model_handle)| {
+                        self.object_loader.load(model_handle.name(), &mut self.texture_loader).unwrap_or_else(|e| {
+                            eprintln!("Error: {e:?}");
+                        });
+                        None
+                    });
                 }
+
 
                 self.render_system();
 
@@ -296,32 +347,33 @@ impl App {
     }
 
     fn render_system(&mut self) {
-        if let Some(current_scene) = &mut self.current_scene {
-            let view = current_scene.camera.get_view_matrix();
+        let Some(current_scene) = &mut self.current_scene else { return; };
 
-            let lit_shader = self.shader_loader.borrow_shader("default").unwrap();
-            lit_shader.use_program();
-            light_system(&mut current_scene.ecs, lit_shader, &mut self.lights_on);
-            lit_shader
-                .set_vec3("u_view_pos", current_scene.camera.get_pos())
-                .set_float("u_material.shininess", 32.0)
-                .set_mat4("projection", current_scene.camera.get_proj_matrix())
-                .set_mat4("view", view);
+        let view = current_scene.camera.get_view_matrix();
+        let lit_shader = self.shader_loader.borrow_shader("default").unwrap();
+        lit_shader.use_program();
+        light_system(&mut current_scene.ecs, lit_shader, &mut self.lights_on);
+        lit_shader
+            .set_vec3("u_view_pos", current_scene.camera.get_pos())
+            .set_float("u_material.shininess", 32.0)
+            .set_mat4("projection", current_scene.camera.get_proj_matrix())
+            .set_mat4("view", view);
 
-            // lit_shader.set_float("u_material.emissive_factor", 1.0);
+        // lit_shader.set_float("u_material.emissive_factor", 1.0);
 
-            current_scene.ecs.do_all::<ModelHandle, Transform>(|model_handle, transform| {
-                let model = self.object_loader.borrow(model_handle).unwrap();
+        current_scene.ecs.do_all::<ModelHandle, Transform>(|model_handle, transform| {
+            if !model_handle.enabled() { return; }
 
-                match model.model_type {
-                    ModelType::Normal => {
-                        model.draw_normal(&mut self.shader_loader, transform)
-                    },
-                    ModelType::Billboard => model.draw_billboard(&mut self.shader_loader, transform, &current_scene.camera),
-                };
-                
-            });
-        }
+            let model = self.object_loader.borrow(model_handle.name());
+            match model.model_type {
+                ModelType::Normal => {
+                    model.draw_normal(&mut self.shader_loader, transform)
+                },
+                ModelType::Billboard => model.draw_billboard(&mut self.shader_loader, transform, &current_scene.camera),
+            };
+
+        });
+
     }
 
     pub fn get_resource_managers(&mut self) -> (&mut TextureLoader, &mut ObjLoader) {
