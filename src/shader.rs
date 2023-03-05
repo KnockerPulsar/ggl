@@ -7,6 +7,7 @@ use std::{
 
 use crate::get_gl;
 
+#[derive(Debug)]
 pub struct ShaderProgram {
     pub handle: glow::Program,
 }

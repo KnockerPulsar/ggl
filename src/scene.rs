@@ -1,7 +1,6 @@
 extern crate nalgebra_glm as glm;
 
-use egui::{Context, LayerId, Ui};
-use egui_gizmo::{Gizmo, GizmoMode, GizmoOrientation};
+use egui_gizmo::GizmoMode;
 use glm::{vec3, vec2, Vec3};
 use glutin::dpi::PhysicalSize;
 
@@ -110,18 +109,6 @@ impl Scene {
         //         attenuation_constants: vec3(0.1, 0.0, 1.0),
         //     });
         
-        let _directional = ecs
-            .add_entity()
-            .with(Transform::new(
-                    vec3(0.0, 0.0, 0.0),
-                    Degree3(vec3(0., 0., 0.)),
-                    "Directional Light",
-            ))
-            .with(DirectionalLight {
-                enabled: true,
-                colors: LightColors::default().ambient(vec3(0.1, 0.04, 0.1)).diffuse(vec3(0.5, 0.2, 0.5)),
-            });
-
 
         let _ground = ecs
             .add_entity()
@@ -149,10 +136,19 @@ impl Scene {
             window_width as f32 / window_height as f32
         );
 
-        let _billboard_test = ecs
+        let _directional = ecs
             .add_entity()
-            .with_default::<Transform>()
-            .with::<ModelHandle>(DEFAULT_PLANE_NAME.into());
+            .with(Transform::new(
+                    vec3(0.0, 0.0, 0.0),
+                    Degree3(vec3(0., 0., 0.)),
+                    "Directional Light",
+            ))
+            .with(DirectionalLight {
+                enabled: true,
+                colors: LightColors::default().ambient(vec3(0.1, 0.04, 0.1)).diffuse(vec3(0.5, 0.2, 0.5)),
+            })
+        .with::<ModelHandle>(DEFAULT_PLANE_NAME.into());
+
 
         Scene {
             selected_entity: None,
@@ -161,46 +157,6 @@ impl Scene {
             ecs
         }
 
-    }
-
-    fn draw_gizmo(&mut self, eid: usize, ui: &mut egui::Ui) {
-        self.ecs.do_entity(eid, |selected_entity_transform: &mut Transform| {
-            let gizmo = Gizmo::new("My gizmo")
-                .view_matrix(self.camera.get_view_matrix())
-                .projection_matrix(self.camera.get_proj_matrix())
-                .model_matrix(selected_entity_transform.get_model_matrix())
-                .mode(self.gizmo_mode)
-                .orientation(GizmoOrientation::Local);
-
-            if let Some(response) = gizmo.interact(ui) {
-                selected_entity_transform.set_model(response.transform.into());
-            }
-        })
-
-    }
-
-    pub fn selected_entity_gizmo(&mut self, egui_ctx: &Context) {
-        let area = egui::Area::new("Gizmo");
-        
-        area.show(egui_ctx, |ui| {
-            // Needed for the gizmo to respond to inputs
-            ui.with_layer_id(LayerId::background(), |ui| {
-
-                let Some(eid) = self.selected_entity else { return; };
-                self.draw_gizmo(eid, ui);
-
-            })
-        });
-    }
-
-    pub fn entities_egui(
-        &mut self,
-        ui: &mut Ui,
-    ) {
-        let just_selected_entity = self.ecs.entity_list(ui, self.selected_entity); 
-        if just_selected_entity.is_some() {
-            self.selected_entity = just_selected_entity;
-        }
     }
 
     pub fn window_size_changed(&mut self, inner_size: &PhysicalSize<u32>) {

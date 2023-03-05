@@ -15,10 +15,9 @@ out vec2 tex_coord;
 
 void main() {
     tex_coord = aTexCoords;
-    vec3 vertex_pos = vec3( model * vec4(billboard_center, 1) );
 
-    gl_Position = projection * view * vec4( vertex_pos , 1 );
-    gl_Position /= (gl_Position.w * billboard_size);
+    gl_Position = projection * view * model * vec4( billboard_center, 1 );
+    gl_Position /= (abs(gl_Position.w) * billboard_size);
 
     gl_Position.xy += aPos.xy;
     gl_Position.z = 0.0; // Draw above anything

@@ -2,73 +2,59 @@
 
 extern crate nalgebra_glm as glm;
 
-use core::fmt;
-
 use std::{
     cell::{RefCell, RefMut},
     borrow::BorrowMut,
-    fmt::Display, convert::identity
+    convert::identity,
+    fmt
 };
 
 use crate::{
     egui_drawable::EguiDrawable,
     transform::Transform,
-    light::*
 };
 use egui::Ui;
 
+macro_rules! type_vec_mut { ($self: expr, $type: ty) => { $self.as_any_mut().downcast_mut::<RefCell<CompVec<$type>>>() } }
+macro_rules! type_vec_ref { ($self: expr, $type: ty) => { $self.as_any().downcast_ref::<RefCell<CompVec<$type>>>() } }
+
+/// returns a reference to the component corresponding to the given entity ID.
+macro_rules! entity_comp { ($comp_vec: ident, $entity_id: expr) => { $comp_vec.get_mut()[$entity_id].as_mut() } }
+
+macro_rules! count {
+    () => (0usize);
+    ( $x:ident $($xs:tt)* ) => (1usize + count!($($xs)*));
+}
+
 macro_rules! addable_component_def {
     ($($comp: ident),+) => {
+
        #[derive(Debug, PartialEq, Clone, Copy)]
-       enum AddableComponent {
-          $(
-            $comp,
-          )+ 
+       pub enum AddableComponent {
+          $($comp,)+ 
        }  
 
-       impl Display for AddableComponent {
+       impl fmt::Display for AddableComponent {
            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                fmt::Debug::fmt(self, f)
            }
        }
+       pub const ADDABLE_COMPONENTS: [AddableComponent; count!($($comp)+)] = [$(AddableComponent::$comp),+];
     };
 }
 
-macro_rules! addable_components {
-    ($($comp: ident),+) => {
-        [$(AddableComponent::$comp),+] 
-    };
-}
+addable_component_def!(Transform, PointLight, SpotLight, DirectionalLight);
 
+#[macro_export]
 macro_rules! add_component {
-    ($self: ident, $comp_var: expr, $selected_entity: ident, [$($k:ident),*]) => {
-        match $comp_var {
+    ($ecs: expr, $selected_entity: expr, [$($k:ident),*]) => {
+        match $ecs.component_to_add {
             $(
-                AddableComponent::$k => $self.add_comp_to_entity($selected_entity, $k::default()),
+                AddableComponent::$k => $ecs.add_comp_to_entity($selected_entity, $k::default()),
             )*
         };
     };
 }
-
-macro_rules! type_vec_mut {
-    ($self: expr, $type: ty) => {
-        $self.as_any_mut().downcast_mut::<RefCell<CompVec<$type>>>()
-    }
-}
-
-macro_rules! type_vec_ref {
-    ($self: expr, $type: ty) => {
-        $self.as_any().downcast_ref::<RefCell<CompVec<$type>>>()
-    }
-}
-
-macro_rules! entity_comp {
-    ($comp_vec: ident, $entity_id: expr) => {
-        $comp_vec.get_mut()[$entity_id].as_mut()
-    }
-}
-
-addable_component_def!(Transform, PointLight, SpotLight, DirectionalLight);
 
 type CompVec<T> = Vec<Option<T>>;
 
@@ -104,7 +90,9 @@ impl<T: 'static + EguiDrawable> ComponentVec for RefCell<CompVec<T>> {
 pub struct Ecs {
     entity_count: usize,
     pub component_vecs: Vec<Box<dyn ComponentVec>>,
-    component_to_add: AddableComponent
+
+    // For UI 
+    pub component_to_add: AddableComponent
 }
 
 impl Ecs {
@@ -141,7 +129,8 @@ impl Ecs {
 
             if entity_comp!(comp_vec, entity).is_some() {
                 let type_name = std::any::type_name::<T>();
-                eprintln!("Attempted to add an duplicate component ({type_name}) onto entity ({entity})")
+                eprintln!("Attempted to add an duplicate component ({type_name}) onto entity ({entity})");
+                return self;
             }
 
             comp_vec.get_mut()[entity] = Some(component);
@@ -153,9 +142,7 @@ impl Ecs {
 
         new_comp_vec[entity] = Some(component);
 
-        self.component_vecs
-            .push(Box::new(RefCell::new(new_comp_vec)));
-
+        self.component_vecs.push(Box::new(RefCell::new(new_comp_vec)));
         self
     }
 
@@ -167,85 +154,6 @@ impl Ecs {
         }
 
         None
-    }
-
-    fn add_component_ui(&mut self, ui: &mut Ui, selected_entity: usize) {
-        const ADDABLE_COMPONENTS: [AddableComponent; 4] = addable_components![Transform, PointLight, SpotLight, DirectionalLight];
-        ui.horizontal(|ui| {
-            
-            let combobox = egui::ComboBox::from_label("Select one!")
-                .selected_text(self.component_to_add.to_string());
-
-            // Changed component to be potentially added
-            combobox.show_ui(ui, |ui| {
-                ADDABLE_COMPONENTS.map(|comp| {
-                    ui.selectable_value(&mut self.component_to_add, comp, comp.to_string());
-                })
-            });
-
-            // Add the currently seleccted component type
-            if ui.button("Add component").clicked() {
-                add_component! {
-                    self, self.component_to_add, selected_entity,
-                    [Transform, PointLight, SpotLight, DirectionalLight]
-                }
-            }
-
-        });
-    }
-
-    /// Show a list of buttons where the label is the entity's name.
-    /// Returns Some(id) if an entity was clicked. None otherwise.
-    fn select_an_entity(&mut self, ui: &mut Ui) -> Option<usize> {
-        ui.vertical(|ui| {
-            let clicked = self.do_all_some::<Transform, usize>(|(id, transform)| {
-                if ui.button(transform.get_name()).clicked() {
-                    Some(id)
-                } else {
-                    None
-                }
-            });
-
-            // Shouldn't click more than one button
-            clicked.first().copied()
-        }).inner
-    }
-
-    pub fn entity_list(&mut self, ui: &mut Ui, prev_selected: Option<usize>) -> Option<usize> {
-        ui.horizontal(|ui| {
-            let new_selected = self.select_an_entity(ui);
-
-            let selection = match (new_selected, prev_selected) {
-                (None, None) => None,
-                (None, Some(_)) => prev_selected,
-                (Some(_), _) => new_selected,
-            }; 
-
-            let Some(selection) = selection else { return None; };
-
-            let name = self.do_entity::<Transform, String>(selection, |t| { t.get_name().into() });
-
-
-
-            ui.vertical(|ui| {
-
-                ui.vertical_centered(|ui| { ui.label(egui::RichText::new(name).strong().underline().size(20.)); });
-
-                ui.add_space(10.);
-
-
-                self.component_vecs
-                    .iter_mut()
-                    .for_each(|cv| cv.draw_egui(ui, selection));
-
-                ui.add_space(10.);
-
-                self.add_component_ui(ui, selection);
-
-            });
-
-            Some(selection)
-        }).inner
     }
 
     pub fn do_n<T , U>(&self, mut f: impl FnMut(&mut T, &mut U), n: usize) 
@@ -264,7 +172,7 @@ impl Ecs {
             .map(|(x,y)| (x.as_mut().unwrap(), y.as_mut().unwrap()))
             .take(n)
             .for_each(|(x,y)| f(x, y));
-        }
+    }
 
     pub fn do_all<T , U>(&self, f: impl FnMut(&mut T, &mut U)) 
         where T: 'static, U: 'static 
@@ -314,8 +222,14 @@ impl Ecs {
             .filter_map(identity)
             .collect()
     }
-}
 
+    pub fn add_empty_entity(&mut self) {
+        let num_entities = self.num_entities();
+        self
+            .add_entity()
+            .with(Transform::with_name(format!("Entity {num_entities}")));
+    }
+}
 
 pub struct EntityBuilder<'a> {
     entity_id: usize,
@@ -326,27 +240,21 @@ impl<'a> EntityBuilder<'a> {
     pub fn with_default<ComponentType>(&mut self) -> &mut Self 
         where ComponentType: 'static + Default + Clone + EguiDrawable
     {
-        self.ecs .add_comp_to_entity(self.entity_id, ComponentType::default());
+        self.ecs.add_comp_to_entity(self.entity_id, ComponentType::default());
         self
     }
 
-    pub fn with<ComponentType>(
-        &mut self,
-        comp: ComponentType,
-    ) -> &mut Self 
+    pub fn with<ComponentType>( &mut self, comp: ComponentType) -> &mut Self 
         where ComponentType: 'static + Default + Clone + EguiDrawable
     {
-        self.ecs .add_comp_to_entity(self.entity_id, comp);
+        self.ecs.add_comp_to_entity(self.entity_id, comp);
         self
     }
 
-    pub fn with_clone<ComponentType>(
-        &mut self,
-        comp: &ComponentType,
-    ) -> &mut Self 
+    pub fn with_clone<ComponentType>( &mut self, comp: &ComponentType) -> &mut Self 
         where ComponentType: 'static + Default + Clone + EguiDrawable
     {
-        self.ecs .add_comp_to_entity(self.entity_id, comp.clone());
+        self.ecs.add_comp_to_entity(self.entity_id, comp.clone());
         self
     }
 }

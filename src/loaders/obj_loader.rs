@@ -142,7 +142,7 @@ impl ObjLoader {
         ];
         
         let textures: Vec<Texture2D> = vec![
-            Texture2D::from_native_handle(texture_loader.point_light_texture(), TextureType::Diffuse)
+            Texture2D::from_native_handle(texture_loader.directional_light_texture(), TextureType::Diffuse)
         ];
         
         let mesh = Mesh::new(&vertices, &indices, textures);

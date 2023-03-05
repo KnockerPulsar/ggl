@@ -73,7 +73,7 @@ impl Model {
 
     pub fn draw_billboard(&self, shader_loader: &mut ShaderLoader, transform: &mut Transform, camera: &Camera) {
         let shader_name = self.shader_name.as_ref().unwrap();
-        let shader = shader_loader.borrow_shader(shader_name).unwrap();
+        let shader = shader_loader.borrow_shader(shader_name).expect(&format!("Cannot load shader: \"{}\"", shader_name));
 
         shader.use_program();
 

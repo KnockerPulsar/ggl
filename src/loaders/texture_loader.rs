@@ -3,12 +3,13 @@ use std::{collections::HashMap, path::Path};
 use crate::get_gl;
 
 const DEFAULT_TEXTURE: &'static str = "default";
-const DEFAULT_TEXTURES: [&str; 5] = [
+const DEFAULT_TEXTURES: [&str; 6] = [
     "assets/textures/white.jpeg",
     "assets/textures/black.jpg",
     "assets/textures/grid.jpg",
     "assets/textures/checker_32_32.jpg",
-    "assets/textures/point_light_white.png"
+    "assets/textures/point_light_white.png",
+    "assets/textures/directional_light_white.png"
 ];
 
 
@@ -190,6 +191,7 @@ impl TextureLoader {
         ("checker_32_32", checker_texture),
         ("white", white_texture),
         ("black", black_texture),
-        ("point_light_white", point_light_texture)
+        ("point_light_white", point_light_texture),
+        ("directional_light_white", directional_light_texture)
     ];
 }

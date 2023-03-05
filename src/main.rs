@@ -1,4 +1,6 @@
 mod loaders;
+mod ui;
+mod renderer;
 
 mod camera;
 mod ecs;
