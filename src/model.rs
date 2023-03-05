@@ -80,8 +80,8 @@ impl Model {
         shader.set_mat4("view", camera.get_view_matrix());
         shader.set_mat4("projection", camera.get_proj_matrix());
         shader.set_mat4("model", transform.get_model_matrix());
-        shader.set_vec3("billboard_center", *transform.get_pos());
-        shader.set_float("billboard_size", 0.1);
+        // shader.set_vec3("billboard_center", *transform.get_pos());
+        // shader.set_float("billboard_size", 0.1);
 
         for mesh in &self.meshes {
             mesh.draw(shader, "");

@@ -124,5 +124,18 @@ impl Renderer {
 }
 
 
+// #[derive(Debug)]
+// struct MeshRenderer {
+//     model: ModelHandle,
+//     shader: ShaderProgram,
+//     textures: Vec<Texture2D>,
+// }
+//
+//
+// enum RenderCommand {
+//     RenderMesh(MeshRenderer),
+//     RenderBillboard(BillboardRenderer)
+// }
+
 // TODO: Continue moving rendering/OpenGL related code to the renderer.
 // TODO: Find a way to decouple models, shaders, and textures. MeshRenderer(Model, Shader, &[Texture])? 
