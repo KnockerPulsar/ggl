@@ -17,7 +17,7 @@ pub fn light_subsystem<T: Light>(
     where T: 'static
 {
     let mut enabled_light_index = 0;
-    ecs.do_all::<Transform, T>(|transform, light| {
+    ecs.do_all::<Transform, T, ()>(|transform, light| {
         light.upload_data(
             transform,
             &format!("{}[{}]", u_light_array, enabled_light_index),
@@ -25,6 +25,8 @@ pub fn light_subsystem<T: Light>(
             global_enable
         );
         enabled_light_index += 1;
+
+        None
     });
 }
 
@@ -45,12 +47,13 @@ pub fn light_system(ecs: &mut Ecs, lit_shader: &ShaderProgram, global_enable: &b
     );
 
 
-    ecs.do_one::<Transform, DirectionalLight>(|transform, directional_light| {
+    ecs.do_one::<Transform, DirectionalLight, ()>(|transform, directional_light| {
         directional_light.upload_data(
             transform, 
             "u_directional_light", 
             lit_shader, 
             &(*global_enable && directional_light.is_enabled())
         );
-    })
+        None
+    });
 }

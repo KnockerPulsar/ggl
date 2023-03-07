@@ -156,13 +156,14 @@ impl Ecs {
         None
     }
 
-    pub fn do_n<T , U>(&self, mut f: impl FnMut(&mut T, &mut U), n: usize) 
+    pub fn do_n<T , U, V>(&self, mut f: impl (FnMut(&mut T, &mut U) -> Option<V>), n: usize)
+        -> Vec<Option<V>>
         where T: 'static, U: 'static
     {
         let (Some(mut t), Some(mut u)) = (self.borrow_comp_vec::<T>(), self.borrow_comp_vec::<U>()) else {
             // use std::any::type_name;
             // println!("do_all: Component type {:?} or {:?} not found", type_name::<T>(), type_name::<U>());
-            return;
+            return vec![];
         };
 
         t 
@@ -171,19 +172,23 @@ impl Ecs {
             .filter(|(x,y)| x.is_some() && y.is_some())
             .map(|(x,y)| (x.as_mut().unwrap(), y.as_mut().unwrap()))
             .take(n)
-            .for_each(|(x,y)| f(x, y));
+            .map(|(x,y)| f(x, y))
+            .collect()
     }
 
-    pub fn do_all<T , U>(&self, f: impl FnMut(&mut T, &mut U)) 
+    pub fn do_all<T , U, V>(&self, f: impl (FnMut(&mut T, &mut U) -> Option<V>)) 
+
+        -> Vec<Option<V>>
         where T: 'static, U: 'static 
     {
-        self.do_n::<T,U>(f, self.entity_count);
+        self.do_n(f, self.entity_count)
     }
 
-    pub fn do_one<T , U>(&self, f: impl FnMut(&mut T, &mut U)) 
+    pub fn do_one<T, U, V>(&self, f: impl (FnMut(&mut T, &mut U) -> Option<V>)) 
+        -> Option<V>
         where T: 'static, U: 'static 
     {
-        self.do_n::<T,U>(f, 1);
+        self.do_n(f, 1).pop().unwrap_or(None)
     }
 
     pub fn do_entity<T, U>(&self, entity_id: usize, mut f: impl (FnMut(&mut T) -> U)) -> U

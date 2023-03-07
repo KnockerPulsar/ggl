@@ -30,8 +30,8 @@ fn main() {
 
     let (mut app, event_loop) = App::init(window_width, window_height);
 
-    let (texture_loader, object_loader) = app.get_resource_managers();
-    let  scene = Scene::light_test(window_width as i32, window_height as i32, texture_loader, object_loader);
+    let (texture_loader, object_loader, shader_loader) = app.get_resource_managers();
+    let  scene = Scene::light_test(window_width as i32, window_height as i32, texture_loader, shader_loader, object_loader);
 
     app.set_scene(scene);
     

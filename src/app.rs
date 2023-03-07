@@ -1,7 +1,8 @@
-use std::{sync::Arc, env};
+use std::{sync::Arc, env, collections::HashMap};
 
-use glow::HasContext;
 use glutin::{event::*, event_loop::ControlFlow};
+use crate::map;
+use crate::shader::Uniform;
 use crate::{
     add_component, 
     ui::*, 
@@ -57,11 +58,7 @@ impl App {
 
         println!("Loading, please wait...");
 
-        let custom_shaders = [
-            ("lit-textured",
-             "assets/shaders/textured.vert",
-             "assets/shaders/lit-textured.frag"),
-        ];
+        let custom_shaders = [ ];
 
         let mut shader_loader = ShaderLoader::new(&custom_shaders);
         let mut texture_loader = TextureLoader::new();
@@ -137,7 +134,7 @@ impl App {
                         let str_path = path.to_str().unwrap();
                         let transform = Transform::with_name(str_path);
 
-                        let loaded_model = self.object_loader.load(str_path, &mut self.texture_loader);
+                        let loaded_model = self.object_loader.load(str_path, &mut self.texture_loader, &mut self.shader_loader);
                         match loaded_model {
                             Ok(_) => { self.current_scene.ecs.add_entity().with(transform).with::<ModelHandle>(str_path.into()); },
                             Err(_) => eprintln!("Failed to load model at \"{str_path}\""),
@@ -217,7 +214,7 @@ impl App {
 
 
                 self.current_scene.ecs.do_all_some::<ModelHandle, ()>(|(_id, model_handle)| {
-                    self.object_loader.load(model_handle.name(), &mut self.texture_loader).unwrap_or_else(|e| {
+                    self.object_loader.load(model_handle.name(), &mut self.texture_loader, &mut self.shader_loader).unwrap_or_else(|e| {
                         eprintln!("Error: {e:?}");
                     });
                     None
@@ -228,7 +225,7 @@ impl App {
                     &self.current_scene.camera,
                     &mut self.current_scene.ecs,
                     &mut self.shader_loader,
-                    &self.object_loader
+                    &mut self.object_loader
                 );
 
                 self.app_ui();
@@ -247,7 +244,7 @@ impl App {
         );
     }
 
-    pub fn get_resource_managers(&mut self) -> (&mut TextureLoader, &mut ObjLoader) {
-        (&mut self.texture_loader, &mut self.object_loader)
+    pub fn get_resource_managers(&mut self) -> (&mut TextureLoader, &mut ObjLoader, &mut ShaderLoader) {
+        (&mut self.texture_loader, &mut self.object_loader, &mut self.shader_loader)
     }
 }

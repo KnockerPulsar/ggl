@@ -1,5 +1,16 @@
 #version 330 core
 
+// So, the GLSL compiler seems to optimize uniforms automatically.
+// Trying to set the uniform later won't error out, but will have no effect.
+// Effectively, a silent failure.
+//
+// For example. If there are no lights, then most of this shader is useless.
+// All textures except the emissive texture are optimized out.
+// So when you try to set the first diffuse texture, it renderdoc will show it 
+// as the first emissive texture. 
+// Querying the position of `texture_diffuse1` will not error out. Instead, it
+// will return the position of `texture_emissive1`.
+
 // ! TODO: Use multiple textures for lighting
 // ! Currently, only the first of each type is used.
 struct Material {
@@ -25,7 +36,6 @@ struct DirectionalLight {
     bool is_enabled;
 };
 
-uniform DirectionalLight u_directional_light;
 
 struct PointLight {
     vec3 position;
@@ -37,10 +47,6 @@ struct PointLight {
     vec3 attenuation_constants; // quadratic, linear, constant  
     bool is_enabled;
 };
-
-#define MAX_POINT_LIGHTS 16
-uniform int u_num_point_lights;
-uniform PointLight u_point_lights[MAX_POINT_LIGHTS];
 
 struct SpotLight {
     vec3 position;
@@ -55,9 +61,6 @@ struct SpotLight {
     bool is_enabled;
 };
 
-#define MAX_SPOT_LIGHTS 16
-uniform int u_num_spot_lights;
-uniform SpotLight u_spot_lights[MAX_SPOT_LIGHTS];
 
 in vec3 normal;
 in vec3 frag_pos;
@@ -68,6 +71,16 @@ out vec4 frag_color;
 uniform vec3 u_view_pos;
 uniform Material u_material;
 
+uniform DirectionalLight u_directional_light;
+
+#define MAX_POINT_LIGHTS 16
+uniform int u_num_point_lights;
+uniform PointLight u_point_lights[MAX_POINT_LIGHTS];
+
+#define MAX_SPOT_LIGHTS 16
+uniform int u_num_spot_lights;
+uniform SpotLight u_spot_lights[MAX_SPOT_LIGHTS];
+
 vec3 computeDirectionalLight(DirectionalLight light, vec3 normal, vec3 view_direction);
 vec3 computePointLight(PointLight light, vec3 normal, vec3 frag_pos, vec3 view_direction);
 vec3 computeSpotLight(SpotLight light, vec3 normal, vec3 frag_pos, vec3 view_direction);
@@ -76,7 +89,7 @@ void main() {
     
     vec3 norm = normalize(normal);
     vec3 view_direction = normalize(u_view_pos - frag_pos);
-    
+
     vec3 result = 
         computeDirectionalLight(u_directional_light, norm, view_direction);
     

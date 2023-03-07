@@ -6,6 +6,8 @@ use image::EncodableLayout;
 
 use crate::{texture::{Texture2D, TextureType}, gl::get_gl, shader::ShaderProgram};
 
+
+#[derive(Clone)]
 pub struct Mesh {
     // Buffer containing 3 floats for position, 3 for vertex normals, 2 for texture coordinates
     pub vert_data: Vec<f32>,
@@ -29,15 +31,16 @@ fn to_bytes(vu32: &mut Vec<u32>) -> Vec<u8> {
 
 impl Mesh {
     pub fn new(
-        vertices: &Vec<f32>,
-        indices: &Vec<u32>,
-        textures: Vec<Texture2D>,
+        vert_data: Vec<f32>,
+        ind_data: Vec<u32>,
+        textures: Vec<Texture2D>
     ) -> Self {
         let gl_rc = get_gl();
         let mut mesh = Mesh {
-            vert_data: vertices.to_owned(),
-            ind_data: indices.to_owned(),
+            vert_data,
+            ind_data,
             textures,
+
             vao: unsafe { gl_rc.create_vertex_array().unwrap() },
             vbo: unsafe { gl_rc.create_buffer().unwrap() },
             ebo: unsafe { gl_rc.create_buffer().unwrap() },
@@ -47,45 +50,11 @@ impl Mesh {
         mesh
     }
 
-    pub fn draw(&self, shader: &ShaderProgram, texture_parent: impl Into<String>) {
-        let mut diffuse_num = 1u32;
-        let mut specular_num = 1u32;
+    pub fn draw(&self, shader: &ShaderProgram, prefix: &str) {
+        shader.upload_textures(&self.textures, prefix);
 
         unsafe {
             let gl_rc = get_gl();
-            let texture_parent = texture_parent.into();
-
-            for i in 0..(self.textures.len() as u32) {
-                gl_rc.active_texture(glow::TEXTURE0 + i);
-
-                let name;
-                let texture_number;
-                match self.textures[i as usize].tex_type {
-                    TextureType::Diffuse => {
-                        texture_number = diffuse_num;
-                        diffuse_num += 1;
-                        name = "texture_diffuse";
-                    }
-                    TextureType::Specular => {
-                        texture_number = specular_num;
-                        specular_num += 1;
-                        name = "texture_specular"
-                    }
-                    // !Only one emissive for now
-                    TextureType::Emissive => {
-                        texture_number = 1;
-                        name = "texture_emissive"
-                    }
-                }
-
-                // println!("{:?}", self.textures[i as usize]);
-                gl_rc.bind_texture(glow::TEXTURE_2D, Some(self.textures[i as usize].native_handle));
-                shader.set_int(
-                    &format!("{}{}{}", texture_parent , name, texture_number),
-                    i as i32,
-                );
-            }
-
             gl_rc.bind_vertex_array(Some(self.vao));
             gl_rc.draw_elements(
                 glow::TRIANGLES,
@@ -116,12 +85,6 @@ impl Mesh {
             );
 
             PNTVertex::setup_attribs(&self.vao);
-        }
-    }
-
-    pub fn add_texture(&mut self, texture: &Texture2D) {
-        if !self.textures.contains(texture) {
-            self.textures.push(texture.clone());
         }
     }
 }

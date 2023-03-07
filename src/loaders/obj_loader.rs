@@ -8,9 +8,9 @@ use std::collections::HashMap;
 
 use crate::{
     texture::{Texture2D, TextureType},
-    model::{Model, ModelType, ObjLoadError}, 
+    model::{Model, ObjLoadError}, 
     mesh::Mesh, egui_drawable::EguiDrawable,
-    loaders::*, enabled_header
+    loaders::*, enabled_header, renderer::Material, shader::ShaderProgram
 };
 
 #[derive(Debug, Clone, Default)]
@@ -51,7 +51,7 @@ macro_rules! default_model_getters {
     ($( ($name: expr, $fn_name: tt) ),*) => {
         $(
             #[allow(dead_code)]
-            pub fn $fn_name(&self) -> &Model {
+            pub fn $fn_name(&mut self) -> &mut Model {
                 self.borrow($name)
             }
         )*
@@ -80,27 +80,36 @@ impl EguiDrawable for ModelHandle {
 
 pub struct ObjLoader {
     models: HashMap<String, Model>,
+    default_cube: Model,
+    default_plane: Model
 }
 
 impl ObjLoader {
-    fn load_default_cube(&mut self, _shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader){
+    fn load_default_cube(shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Model {
         let cube_path = "assets/obj/cube.obj";
 
-        let mut cube_model = Model::load_obj(cube_path, texture_loader).unwrap();
+        let mut cube_model = Model::load_obj(cube_path, texture_loader, shader_loader).unwrap();
         let checker_texture = texture_loader.checker_texture();
 
-        cube_model.add_texture(&Texture2D { 
-            native_handle: checker_texture, 
-            tex_type: TextureType::Diffuse
-        }).add_texture(&Texture2D { 
-            native_handle: checker_texture,
-            tex_type: TextureType::Specular
-        }).with_shader_name(DEFAULT_SHADER);
+        cube_model
+        // .add_texture(&Texture2D { 
+        //     native_handle: checker_texture, 
+        //     tex_type: TextureType::Diffuse,
+        //     tex_index: 1,
+        //     tex_unit: 0
+        // })
+        // .add_texture(&Texture2D { 
+        //     native_handle: checker_texture,
+        //     tex_type: TextureType::Specular,
+        //     tex_index: 1,
+        //     tex_unit: 1
+        // })
+        .with_material(Material::default_unlit(shader_loader));
 
-        self.models.insert(DEFAULT_CUBE_NAME.into(), cube_model);
+        cube_model
     }
 
-    fn load_default_plane(&mut self, _shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) {
+    fn load_default_plane(shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Model {
         
         //                   ^
         //  (-0.5, 0.5, 0)   |       (0.5, 0.5, 0)     
@@ -141,47 +150,70 @@ impl ObjLoader {
             2, 1, 3
         ];
         
+        let default_texture = Texture2D::from_native_handle(
+            texture_loader.directional_light_texture(), 
+            TextureType::Diffuse, 1
+        );
+
         let textures: Vec<Texture2D> = vec![
-            Texture2D::from_native_handle(texture_loader.directional_light_texture(), TextureType::Diffuse)
+            default_texture.clone()
         ];
         
-        let mesh = Mesh::new(&vertices, &indices, textures);
+        let mesh = Mesh::new(vertices, indices, textures);
         
         let default_square = Model {
             meshes: vec![mesh],
-            shader_name: Some(DEFAULT_BILLBOARD_SHADER.to_string()),
             directory: "".to_string(),
-            model_type: ModelType::Billboard
+            material: Material::default_billboard(texture_loader)
         };
 
-        self.models.insert(DEFAULT_PLANE_NAME.into(), default_square);
+        default_square
     }
 
     pub fn new(shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Self {
-        let mut obj_loader = ObjLoader { models: HashMap::new() };
-
-        obj_loader.load_default_cube(shader_loader, texture_loader);
-        obj_loader.load_default_plane(shader_loader, texture_loader);
-
-        obj_loader
+        ObjLoader { 
+            models: HashMap::new(),
+            default_cube: Self::load_default_cube(shader_loader, texture_loader),
+            default_plane: Self::load_default_plane(shader_loader, texture_loader)
+        }
     }
 
-    pub fn load(&mut self, path: impl Into<String>, texture_loader: &mut TextureLoader) -> ModelLoadResult<()> {
+    pub fn load(&mut self, path: impl Into<String>, texture_loader: &mut TextureLoader, shader_loader: &mut ShaderLoader) -> ModelLoadResult<()> {
         let path_string: String = path.into();
 
+        if [DEFAULT_CUBE_NAME, DEFAULT_PLANE_NAME].contains(&path_string.as_str()) {
+            return Ok(());
+        }
+
         if !self.models.contains_key(&path_string) {
-            self.models.insert(path_string.clone(), Model::load(&path_string, texture_loader)?);
+            self.models.insert(path_string.clone(), Model::load(&path_string, texture_loader, shader_loader)?);
         }
 
         self.models.get_mut(&path_string).unwrap(); // Should always succeed
         Ok(())
     }
 
-    pub fn borrow(&self, model_path: &str) -> &Model {
-        match self.models.get(model_path) {
-            Some(model) => model,
-            None => self.default_cube_model(),
+    pub fn borrow(&mut self, model_path: &str) -> &mut Model {
+
+        if model_path == DEFAULT_CUBE_NAME {
+            return &mut self.default_cube
+        } else if model_path == DEFAULT_PLANE_NAME {
+            return &mut self.default_plane
         }
+
+        self
+            .models
+            .get_mut(model_path)
+            .unwrap_or(&mut self.default_cube)
+    }
+    
+    pub fn clone(&mut self, old_name: &str, new_name: &str) -> &mut Model {
+        assert!(new_name != old_name, "New and old model names must be different!");
+
+        let new_model = self.borrow(old_name).clone();
+        self.models.insert(new_name.to_string(), new_model);
+
+        self.borrow(new_name)
     }
 
     pub fn models(&mut self) -> &mut HashMap<String, Model> {

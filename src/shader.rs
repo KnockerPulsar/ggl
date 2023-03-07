@@ -1,21 +1,47 @@
+use glm::{Vec2, Vec3, Mat4};
 use glow::*;
 use nalgebra_glm as glm;
 use std::{
     fs,
-    error::Error
+    error::Error, 
+    collections::HashMap
 };
 
-use crate::get_gl;
+use crate::{get_gl, texture::{Texture2D, TextureType}};
 
-#[derive(Debug)]
+#[macro_export]
+macro_rules! map {
+    (
+        $($key: tt => $value: expr),*
+    ) => {
+        HashMap::from([
+            $(($key, $value)),*
+        ])
+    }
+}
+
+pub type UniformMap = HashMap<&'static str, Uniform>;
+
+#[derive(Debug, Clone, Copy)]
+pub enum Uniform {
+    Float(f32),
+    Vec2(Vec2),
+    Vec3(Vec3),
+    Color(Vec3),
+    Mat4(Mat4),
+}
+
+#[derive(Debug, Hash, Eq)]
 pub struct ShaderProgram {
     pub handle: glow::Program,
+    textures: Vec<Texture2D>
 }
 
 impl ShaderProgram {
     pub fn new(
         vert_shader_path: impl Into<String>,
         frag_shader_path: impl Into<String>,
+        _uniforms: UniformMap 
     ) -> Result<ShaderProgram, Box<dyn Error>> {
 
         let vert_shader_path = vert_shader_path.into();
@@ -47,32 +73,59 @@ impl ShaderProgram {
         println!("Loaded shader program ({shader_program_handle:?}), vertex shader: \"{vert_shader_path}\", fragment shader: \"{frag_shader_path}\"");
         Ok(ShaderProgram {
             handle: shader_program_handle,
+            textures: vec![]
         })
     }
 
-    pub fn use_program(&self) {
-        unsafe {
-            get_gl().use_program(Some(self.handle));
-        }
+    pub fn use_program(&self) -> &Self {
+        unsafe { get_gl().use_program(Some(self.handle)); }
+        self
     }
 
-    fn get_uniform_location(&self, name: &str) -> glow::UniformLocation {
-        unsafe {
-            match get_gl().get_uniform_location(self.handle, name) {
-                Some(program) => program,
-                None => {
-                    panic!(
-                        "The requested uniform \"{}\" is not in the shader {:?}",
-                        name, self.handle
-                    );
-                }
-            }
+    fn get_uniform_location(&self, name: &str) -> Option<glow::UniformLocation > {
+        unsafe { get_gl().get_uniform_location(self.handle, name) }
+    }
+
+    pub fn upload_uniforms(&self, uniforms: UniformMap, prefix: &str) {
+        uniforms
+            .iter()
+            .for_each(|(uniform_name, uniform_value)| {
+                let uniform_name = format!("{prefix}{uniform_name}");
+
+                match uniform_value {
+                    Uniform::Float(float)              => self.set_float(&uniform_name, *float),
+                    Uniform::Vec2(v2)                  => self.set_vec2(&uniform_name, *v2),
+                    Uniform::Vec3(v3) 
+                        | Uniform::Color(v3)           => self.set_vec3(&uniform_name, *v3),
+                    Uniform::Mat4(mat)                 => self.set_mat4(&uniform_name, *mat),
+                };    
+            });
+    }
+
+    // `prefix` is for when you have a texture inside a struct for example.
+    // You'd have to set the uniform `struct_instance.texture_diffuse1` as an example.
+    pub fn upload_textures(&self, textures: &[Texture2D], prefix: &str) {
+        for (i, texture) in textures.iter().enumerate() {
+            texture.activate_and_bind(i as u32);
+
+            let base_name = match texture.tex_type {
+                TextureType::Diffuse => "texture_diffuse",
+                TextureType::Specular => "texture_specular",
+                TextureType::Emissive => "texture_emissive",
+            };
+            let full_name = format!("{prefix}{base_name}{}", texture.tex_index);
+            self.set_int(&full_name, i as i32);
         }
+
     }
 
     pub fn set_int(&self, name: &str, value: i32) -> &Self {
         unsafe {
-            get_gl().uniform_1_i32(Some(&self.get_uniform_location(name)), value as i32);
+            match &self.get_uniform_location(name) {
+                Some(name) => get_gl().uniform_1_i32(Some(name), value as i32),
+                None => eprintln!("Int uniform \"{name}\" not found")
+            }
+            
             self
         }
     }
@@ -85,19 +138,22 @@ impl ShaderProgram {
 
     pub fn set_float(&self, name: &str, value: f32) -> &Self {
         unsafe {
-            get_gl().uniform_1_f32(Some(&self.get_uniform_location(name)), value);
+            match &self.get_uniform_location(name) {
+                Some(name) => get_gl().uniform_1_f32(Some(name), value),
+                None => eprintln!("Float uniform \"{name}\" not found"),
+            }
             self
         }
     }
 
     pub fn set_vec3(&self, name: &str, value: glm::Vec3) -> &Self {
         unsafe {
-            get_gl().uniform_3_f32(
-                Some(&self.get_uniform_location(name)),
-                value.x,
-                value.y,
-                value.z,
-            );
+
+
+            match &self.get_uniform_location(name) {
+                Some(name) => get_gl().uniform_3_f32(Some(name), value.x, value.y, value.z),
+                None => eprintln!("Vec3 uniform \"{name}\" not found")
+            }
 
             self
         }
@@ -105,18 +161,21 @@ impl ShaderProgram {
 
     pub fn set_vec2(&self, name: &str, value: glm::Vec2) -> &Self {
         unsafe {
-            get_gl().uniform_2_f32(Some(&self.get_uniform_location(name)), value.x, value.y);
+            match &self.get_uniform_location(name) {
+                Some(name) => get_gl().uniform_2_f32(Some(name), value.x, value.y),
+                None => eprintln!("Vec2 uniform \"{name}\" not found")
+            }
+            
             self
         }
     }
 
     pub fn set_mat4(&self, name: &str, value: glm::Mat4) -> &Self {
         unsafe {
-            get_gl().uniform_matrix_4_f32_slice(
-                Some(&self.get_uniform_location(name)),
-                false,
-                glm::value_ptr(&value),
-            );
+            match &self.get_uniform_location(name) {
+                Some(name) => get_gl().uniform_matrix_4_f32_slice(Some(name), false, glm::value_ptr(&value)),
+                None => eprintln!("Mat4 uniform \"{name}\" not found")
+            }
 
             self
         }
@@ -164,3 +223,10 @@ fn create_program(
         }
     }
 }
+
+impl PartialEq for ShaderProgram {
+    fn eq(&self, other: &Self) -> bool {
+        self.handle == other.handle
+    }
+}
+

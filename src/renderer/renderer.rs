@@ -1,7 +1,12 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    collections::{HashMap, HashSet}, convert::identity
+};
 
 use glow::HasContext;
 use glutin::dpi::PhysicalSize;
+use itertools::Itertools;
+use nalgebra_glm::{Vec3, Vec2, Mat4, Vec4};
 
 use crate::{
     gl::{set_gl, get_gl},
@@ -11,7 +16,9 @@ use crate::{
     ecs::Ecs,
     light_system,
     transform::Transform,
-    model::ModelType, texture::Texture2D, shader::ShaderProgram
+    model::Model, 
+    texture::{Texture2D, TextureType}, shader::{ShaderProgram, UniformMap, Uniform}, 
+    map
 };
 
 pub type GlutinWindow = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
@@ -82,60 +89,153 @@ impl Renderer {
         camera: &Camera,
         ecs: &mut Ecs,
         shader_loader: &mut ShaderLoader,
-        object_loader: &ObjLoader
+        object_loader: &mut ObjLoader
     ) {
         let gl = get_gl();
-        unsafe{
+        unsafe {
             gl.enable(glow::DEPTH_TEST);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
             gl.enable(glow::BLEND);
-            gl.clear_color(0.9, 0.9, 0.9, 1.0);
+            gl.clear_color(0.2, 0.2, 0.2, 1.0);
             gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         }
 
-        let view = camera.get_view_matrix();
-        let lit_shader = shader_loader.borrow_shader("default").unwrap();
-        lit_shader.use_program();
-
-        light_system(ecs, lit_shader, &mut self.lights_on);
-
-        lit_shader
-            .set_vec3("u_view_pos", camera.get_pos())
-            .set_float("u_material.shininess", 32.0)
-            .set_mat4("projection", camera.get_proj_matrix())
-            .set_mat4("view", view);
-
+        let default_lit = shader_loader.borrow_shader(DEFAULT_LIT_SHADER);
+        default_lit.use_program();
+        light_system(ecs, default_lit, &mut self.lights_on);
+          
         // lit_shader.set_float("u_material.emissive_factor", 1.0);
 
-        ecs.do_all::<ModelHandle, Transform>(|model_handle, transform| {
-            if !model_handle.enabled() { return; }
+        ecs.do_all::<_, _, RenderCommand>(|model_handle: &mut ModelHandle, transform: &mut Transform| {
+            if !model_handle.enabled() { return None; }
 
             let model = object_loader.borrow(model_handle.name());
-            match model.model_type {
-                ModelType::Normal => {
-                    model.draw_normal(shader_loader, transform)
-                },
-                ModelType::Billboard => model.draw_billboard(shader_loader, transform, camera),
-            };
+            Self::draw_model(shader_loader, transform, camera, model);
 
+            None
         });
 
     }
+
+    pub fn draw_model(shader_loader: &mut ShaderLoader, transform: &Transform, camera: &Camera, model: &mut Model) {
+        let uniforms = match &model.material.material_type {
+            MaterialType::LitMaterial => map! {
+                "projection" => Uniform::Mat4(camera.get_proj_matrix()),
+                "view"       => Uniform::Mat4(camera.get_view_matrix()),
+                "model"      => Uniform::Mat4(transform.get_model_matrix()),
+                "u_view_pos" => Uniform::Vec3(camera.get_pos()),
+                "u_material.shininess" => Uniform::Float(32.0)
+            },
+            MaterialType::BillboardMaterial | MaterialType::UnlitMaterial => map! {
+                "projection" => Uniform::Mat4(camera.get_proj_matrix()),
+                "view"       => Uniform::Mat4(camera.get_view_matrix()),
+                "model"      => Uniform::Mat4(transform.get_model_matrix())
+            },
+        };
+
+        let prefix = match &model.material.material_type {
+            MaterialType::LitMaterial  => "u_material.",
+            _                          => ""
+        };
+
+        let shader = shader_loader.borrow_shader(model.material.shader_ref()).use_program();
+        model.material.upload_uniforms(shader_loader, uniforms, "");
+
+        let shader = shader_loader.borrow_shader(model.material.shader_ref()).use_program();
+        for mesh in &model.meshes {
+            mesh.draw(shader, prefix);
+        }
+    }
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub enum MaterialType {
+    UnlitMaterial,
+    LitMaterial,
+    BillboardMaterial
+}
 
-// #[derive(Debug)]
-// struct MeshRenderer {
-//     model: ModelHandle,
-//     shader: ShaderProgram,
-//     textures: Vec<Texture2D>,
-// }
-//
-//
-// enum RenderCommand {
-//     RenderMesh(MeshRenderer),
-//     RenderBillboard(BillboardRenderer)
-// }
+#[derive(Clone, Eq)]
+pub struct Material {
+    shader_ref: &'static str,
+    pub material_type: MaterialType
+}
 
+impl Material {
+    pub fn default_billboard(texture_loader: &mut TextureLoader) -> Self {
+        let directional_light = texture_loader.directional_light_texture();
+        let diffuse_texture = Texture2D::from_native_handle(
+            directional_light,
+            crate::texture::TextureType::Diffuse,
+            1
+        );
+
+        Material {
+            shader_ref   : DEFAULT_BILLBOARD_SHADER,
+            material_type: MaterialType::BillboardMaterial
+        }
+    }
+
+    pub fn default_unlit(_shader_loader: &mut ShaderLoader) -> Self {
+        Material {
+            shader_ref   : DEFAULT_UNLIT_SHADER,
+            material_type: MaterialType::UnlitMaterial
+        }
+    }
+
+    pub fn default_lit(_texture_loader: &mut TextureLoader) -> Self {
+        Material {
+            shader_ref   : DEFAULT_LIT_SHADER,
+            material_type: MaterialType::LitMaterial
+        }
+    }
+
+    pub fn shader_ref(&self) -> &'static str {
+        self.shader_ref
+    }
+
+    pub fn upload_uniforms(&self, shader_loader: &mut ShaderLoader, uniforms: UniformMap, prefix: &str) {
+        shader_loader
+            .borrow_shader(self.shader_ref())
+            .upload_uniforms(uniforms, prefix);
+    }
+
+    pub fn upload_textures(&mut self, shader_loader: &mut ShaderLoader, textures: &[Texture2D], prefix: &str) {
+        let shader = shader_loader.borrow_shader(self.shader_ref());
+        shader.upload_textures(&textures, prefix)
+    }
+
+    // pub fn add_texture(&mut self, texture: &Texture2D) {
+    //     match self.material_type {
+    //         MaterialType::LitMaterial => self.textures.push(*texture),
+    //         MaterialType::BillboardMaterial =>  {
+    //             if self.textures.len() > 0 { 
+    //                 self.textures.push(*texture); 
+    //             } else { 
+    //                 self.textures[0] = *texture; 
+    //             }
+    //         },
+    //         MaterialType::UnlitMaterial => {
+    //             eprintln!("Attempted to add a texture to a materail that doesn't support textures")
+    //         }
+    //     }
+    // }
+}
+
+impl PartialEq for Material {
+    fn eq(&self, other: &Self) -> bool {
+        self.shader_ref() == other.shader_ref()
+    }
+}
+
+struct RenderCommand(Transform, Material, ModelHandle);
+
+
+// TODO: Fix model loading (textures don't carry over when chaning materials)
 // TODO: Continue moving rendering/OpenGL related code to the renderer.
 // TODO: Find a way to decouple models, shaders, and textures. MeshRenderer(Model, Shader, &[Texture])? 
+// TODO: Perhaps change UniformMap to an array of tuples?
+// Also, add support for recursion so nested structs won't be as painful.
+// TODO: Store meshes in ObjLoader
+// and store only their indices for easier copying.
+// TODO: Proper transparency

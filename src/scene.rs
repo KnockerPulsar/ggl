@@ -9,7 +9,7 @@ use crate::{
     ecs::Ecs,
     transform::{Transform, Degree3},
     light::*,
-    loaders::*,
+    loaders::*, renderer::Material,
 };
 
 pub struct Scene {
@@ -33,8 +33,9 @@ impl Scene {
     pub fn light_test(
         window_width: i32, 
         window_height: i32,
-        _texture_loader: &mut TextureLoader, 
-        _object_loader: &mut ObjLoader
+        texture_loader: &mut TextureLoader, 
+        shader_loader: &mut ShaderLoader, 
+        object_loader: &mut ObjLoader
     ) -> Self {
 
         let mut ecs = Ecs::new();
@@ -109,6 +110,9 @@ impl Scene {
         //         attenuation_constants: vec3(0.1, 0.0, 1.0),
         //     });
         
+        let lit_cube = "lit_cube";
+        let mut ground_lit = object_loader.clone(DEFAULT_CUBE_NAME, lit_cube);
+        // ground_lit.material = Material::default_lit(texture_loader);
 
         let _ground = ecs
             .add_entity()
@@ -119,16 +123,16 @@ impl Scene {
                     vec3(10., 1., 10.), 
                     "ground"
                 )
-            ).with::<ModelHandle>(DEFAULT_CUBE_NAME.into());
+            ).with::<ModelHandle>(lit_cube.into());
 
 
-        for cube_transform in cube_data {
-            let _model = ecs
-                .add_entity()
-                .with(cube_transform)
-                .with::<ModelHandle>(DEFAULT_CUBE_NAME.into());
-            }
-
+        // for cube_transform in cube_data {
+        //     let _model = ecs
+        //         .add_entity()
+        //         .with(cube_transform)
+        //         .with::<ModelHandle>(DEFAULT_CUBE_NAME.into());
+        //     }
+        //
         let cam = Camera::new(
             glm::vec3(0.0, 1.0, 5.0f32),
             glm::vec3(0.0, 1.0, 0.0f32),
@@ -138,9 +142,10 @@ impl Scene {
 
         let _directional = ecs
             .add_entity()
-            .with(Transform::new(
+            .with(Transform::with_scale(
                     vec3(0.0, 0.0, 0.0),
                     Degree3(vec3(0., 0., 0.)),
+                    vec3(0.1, 0.1, 0.1),
                     "Directional Light",
             ))
             .with(DirectionalLight {
@@ -148,7 +153,16 @@ impl Scene {
                 colors: LightColors::default().ambient(vec3(0.1, 0.04, 0.1)).diffuse(vec3(0.5, 0.2, 0.5)),
             })
         .with::<ModelHandle>(DEFAULT_PLANE_NAME.into());
+        
+        let bp_handle = "assets/obj/backpack.obj";
+        let _ = object_loader.load(bp_handle, texture_loader, shader_loader);
+        let bp = object_loader.borrow(bp_handle);
+        bp.change_material(Material::default_lit(texture_loader));
 
+        let _backpack = ecs
+            .add_entity()
+            .with(Transform::default().set_name("Backpack").clone())
+            .with::<ModelHandle>(bp_handle.into());
 
         Scene {
             selected_entity: None,

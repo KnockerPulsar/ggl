@@ -2,7 +2,7 @@ use glow::HasContext;
 use std::{collections::HashMap, path::Path};
 use crate::get_gl;
 
-const DEFAULT_TEXTURE: &'static str = "default";
+const DEFAULT_TEXTURE: &str = "default";
 const DEFAULT_TEXTURES: [&str; 6] = [
     "assets/textures/white.jpeg",
     "assets/textures/black.jpg",

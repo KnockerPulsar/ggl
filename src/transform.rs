@@ -6,7 +6,7 @@ use egui::Ui;
 use glm::{Vec3, Mat4, vec3};
 use nalgebra_glm as glm;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Transform {
     pos: Vec3,
     rot: Degree3,
