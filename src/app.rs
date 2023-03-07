@@ -1,8 +1,8 @@
-use std::{sync::Arc, env, collections::HashMap};
+use std::{sync::Arc, env};
 
 use glutin::{event::*, event_loop::ControlFlow};
-use crate::map;
-use crate::shader::Uniform;
+
+
 use crate::{
     add_component, 
     ui::*, 
@@ -172,7 +172,7 @@ impl App {
                     ..
                 } = &event
                 {
-                    self.renderer.window_resized(*new_inner_size)
+                    self.renderer.window_resized(new_inner_size)
                 }
 
                 self.glow.on_event(&event);

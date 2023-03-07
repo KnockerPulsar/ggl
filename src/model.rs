@@ -1,10 +1,10 @@
-use std::collections::HashSet;
+
 
 use obj::{Obj, ObjError, MtlLibsLoadError};
 
 use crate::loaders::*;
 
-use crate::renderer::{Material, MaterialType};
+use crate::renderer::{Material};
 use crate::{
     egui_drawable::EguiDrawable,
     texture::{Texture2D, TextureType},
@@ -45,7 +45,7 @@ impl Model {
         &self.meshes[index]
     }
 
-    pub fn change_material(&mut self, mut new_material: Material) -> &mut Self {
+    pub fn change_material(&mut self, new_material: Material) -> &mut Self {
        self.material = new_material;
        self
     }
@@ -114,7 +114,7 @@ impl Model {
             let mut textures: Vec<Texture2D> = vec![];
             let mut num_diffuse = 1;
             let mut num_specular = 1;
-            let mut num_emissive = 1;
+            let _num_emissive = 1;
 
             for (_, poly) in obj_group.polys.iter().enumerate() {
                 for vertex in &poly.0 {
@@ -131,7 +131,7 @@ impl Model {
                     }
                 }
 
-                inds.extend(vec![index as u32, (index + 1) as u32, (index + 2) as u32]);
+                inds.extend(vec![index, (index + 1), (index + 2)]);
                 index += 3;
 
                 if let Some(obj_mat) = &obj_group.material {

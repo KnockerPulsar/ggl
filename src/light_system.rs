@@ -31,6 +31,7 @@ pub fn light_subsystem<T: Light>(
 }
 
 pub fn light_system(ecs: &mut Ecs, lit_shader: &ShaderProgram, global_enable: &bool) {
+    lit_shader.use_program();
 
     light_subsystem::<SpotLight>(
         lit_shader,

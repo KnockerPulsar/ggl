@@ -10,7 +10,7 @@ use crate::{
     texture::{Texture2D, TextureType},
     model::{Model, ObjLoadError}, 
     mesh::Mesh, egui_drawable::EguiDrawable,
-    loaders::*, enabled_header, renderer::Material, shader::ShaderProgram
+    loaders::*, enabled_header, renderer::Material
 };
 
 #[derive(Debug, Clone, Default)]
@@ -43,8 +43,8 @@ impl ModelHandle {
 
 pub type ModelLoadResult<T> = std::result::Result<T, ObjLoadError>;
 
-pub const DEFAULT_CUBE_NAME: &'static str = "default_cube";
-pub const DEFAULT_PLANE_NAME: &'static str = "default_plane";
+pub const DEFAULT_CUBE_NAME: &str = "default_cube";
+pub const DEFAULT_PLANE_NAME: &str = "default_plane";
 
 
 macro_rules! default_model_getters {
@@ -68,7 +68,7 @@ impl EguiDrawable for ModelHandle {
                 if ui.button("Load model").clicked() {
                     let path = rfd::FileDialog::new().add_filter("Object model", &["obj"]).pick_file(); 
                     if let Some(path) = path { 
-                        let t = path.to_str().unwrap_or_else(|| DEFAULT_CUBE_NAME).to_owned();
+                        let t = path.to_str().unwrap_or(DEFAULT_CUBE_NAME).to_owned();
                         self.name = t;
                     }
                 }
@@ -89,7 +89,7 @@ impl ObjLoader {
         let cube_path = "assets/obj/cube.obj";
 
         let mut cube_model = Model::load_obj(cube_path, texture_loader, shader_loader).unwrap();
-        let checker_texture = texture_loader.checker_texture();
+        let _checker_texture = texture_loader.checker_texture();
 
         cube_model
         // .add_texture(&Texture2D { 
@@ -109,7 +109,7 @@ impl ObjLoader {
         cube_model
     }
 
-    fn load_default_plane(shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Model {
+    fn load_default_plane(_shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Model {
         
         //                   ^
         //  (-0.5, 0.5, 0)   |       (0.5, 0.5, 0)     
@@ -156,18 +156,18 @@ impl ObjLoader {
         );
 
         let textures: Vec<Texture2D> = vec![
-            default_texture.clone()
+            default_texture
         ];
         
         let mesh = Mesh::new(vertices, indices, textures);
         
-        let default_square = Model {
+        
+
+        Model {
             meshes: vec![mesh],
             directory: "".to_string(),
             material: Material::default_billboard(texture_loader)
-        };
-
-        default_square
+        }
     }
 
     pub fn new(shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Self {

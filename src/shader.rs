@@ -22,6 +22,7 @@ macro_rules! map {
 
 pub type UniformMap = HashMap<&'static str, Uniform>;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum Uniform {
     Float(f32),
@@ -31,10 +32,9 @@ pub enum Uniform {
     Mat4(Mat4),
 }
 
-#[derive(Debug, Hash, Eq)]
+#[derive(Debug, Eq)]
 pub struct ShaderProgram {
     pub handle: glow::Program,
-    textures: Vec<Texture2D>
 }
 
 impl ShaderProgram {
@@ -71,11 +71,7 @@ impl ShaderProgram {
         }
 
         println!("Loaded shader program ({shader_program_handle:?}), vertex shader: \"{vert_shader_path}\", fragment shader: \"{frag_shader_path}\"");
-        Ok(ShaderProgram {
-            handle: shader_program_handle,
-            textures: vec![]
-        })
-    }
+        Ok(ShaderProgram { handle: shader_program_handle, }) }
 
     pub fn use_program(&self) -> &Self {
         unsafe { get_gl().use_program(Some(self.handle)); }
@@ -122,7 +118,7 @@ impl ShaderProgram {
     pub fn set_int(&self, name: &str, value: i32) -> &Self {
         unsafe {
             match &self.get_uniform_location(name) {
-                Some(name) => get_gl().uniform_1_i32(Some(name), value as i32),
+                Some(name) => get_gl().uniform_1_i32(Some(name), value),
                 None => eprintln!("Int uniform \"{name}\" not found")
             }
             

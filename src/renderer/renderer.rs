@@ -1,12 +1,12 @@
 use std::{
     sync::Arc,
-    collections::{HashMap, HashSet}, convert::identity
+    collections::HashMap
 };
 
 use glow::HasContext;
 use glutin::dpi::PhysicalSize;
-use itertools::Itertools;
-use nalgebra_glm::{Vec3, Vec2, Mat4, Vec4};
+
+
 
 use crate::{
     gl::{set_gl, get_gl},
@@ -17,7 +17,8 @@ use crate::{
     light_system,
     transform::Transform,
     model::Model, 
-    texture::{Texture2D, TextureType}, shader::{ShaderProgram, UniformMap, Uniform}, 
+    texture::Texture2D, 
+    shader::{UniformMap, Uniform}, 
     map
 };
 
@@ -101,11 +102,8 @@ impl Renderer {
         }
 
         let default_lit = shader_loader.borrow_shader(DEFAULT_LIT_SHADER);
-        default_lit.use_program();
-        light_system(ecs, default_lit, &mut self.lights_on);
+        light_system(ecs, default_lit, &self.lights_on);
           
-        // lit_shader.set_float("u_material.emissive_factor", 1.0);
-
         ecs.do_all::<_, _, RenderCommand>(|model_handle: &mut ModelHandle, transform: &mut Transform| {
             if !model_handle.enabled() { return None; }
 
@@ -119,14 +117,14 @@ impl Renderer {
 
     pub fn draw_model(shader_loader: &mut ShaderLoader, transform: &Transform, camera: &Camera, model: &mut Model) {
         let uniforms = match &model.material.material_type {
-            MaterialType::LitMaterial => map! {
+            MaterialType::Lit => map! {
                 "projection" => Uniform::Mat4(camera.get_proj_matrix()),
                 "view"       => Uniform::Mat4(camera.get_view_matrix()),
                 "model"      => Uniform::Mat4(transform.get_model_matrix()),
                 "u_view_pos" => Uniform::Vec3(camera.get_pos()),
                 "u_material.shininess" => Uniform::Float(32.0)
             },
-            MaterialType::BillboardMaterial | MaterialType::UnlitMaterial => map! {
+            MaterialType::Billboard | MaterialType::Unlit => map! {
                 "projection" => Uniform::Mat4(camera.get_proj_matrix()),
                 "view"       => Uniform::Mat4(camera.get_view_matrix()),
                 "model"      => Uniform::Mat4(transform.get_model_matrix())
@@ -134,11 +132,11 @@ impl Renderer {
         };
 
         let prefix = match &model.material.material_type {
-            MaterialType::LitMaterial  => "u_material.",
+            MaterialType::Lit  => "u_material.",
             _                          => ""
         };
 
-        let shader = shader_loader.borrow_shader(model.material.shader_ref()).use_program();
+        let _shader = shader_loader.borrow_shader(model.material.shader_ref()).use_program();
         model.material.upload_uniforms(shader_loader, uniforms, "");
 
         let shader = shader_loader.borrow_shader(model.material.shader_ref()).use_program();
@@ -150,9 +148,9 @@ impl Renderer {
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum MaterialType {
-    UnlitMaterial,
-    LitMaterial,
-    BillboardMaterial
+    Unlit,
+    Lit,
+    Billboard
 }
 
 #[derive(Clone, Eq)]
@@ -164,7 +162,7 @@ pub struct Material {
 impl Material {
     pub fn default_billboard(texture_loader: &mut TextureLoader) -> Self {
         let directional_light = texture_loader.directional_light_texture();
-        let diffuse_texture = Texture2D::from_native_handle(
+        let _diffuse_texture = Texture2D::from_native_handle(
             directional_light,
             crate::texture::TextureType::Diffuse,
             1
@@ -172,21 +170,21 @@ impl Material {
 
         Material {
             shader_ref   : DEFAULT_BILLBOARD_SHADER,
-            material_type: MaterialType::BillboardMaterial
+            material_type: MaterialType::Billboard
         }
     }
 
     pub fn default_unlit(_shader_loader: &mut ShaderLoader) -> Self {
         Material {
             shader_ref   : DEFAULT_UNLIT_SHADER,
-            material_type: MaterialType::UnlitMaterial
+            material_type: MaterialType::Unlit
         }
     }
 
     pub fn default_lit(_texture_loader: &mut TextureLoader) -> Self {
         Material {
             shader_ref   : DEFAULT_LIT_SHADER,
-            material_type: MaterialType::LitMaterial
+            material_type: MaterialType::Lit
         }
     }
 
@@ -199,27 +197,6 @@ impl Material {
             .borrow_shader(self.shader_ref())
             .upload_uniforms(uniforms, prefix);
     }
-
-    pub fn upload_textures(&mut self, shader_loader: &mut ShaderLoader, textures: &[Texture2D], prefix: &str) {
-        let shader = shader_loader.borrow_shader(self.shader_ref());
-        shader.upload_textures(&textures, prefix)
-    }
-
-    // pub fn add_texture(&mut self, texture: &Texture2D) {
-    //     match self.material_type {
-    //         MaterialType::LitMaterial => self.textures.push(*texture),
-    //         MaterialType::BillboardMaterial =>  {
-    //             if self.textures.len() > 0 { 
-    //                 self.textures.push(*texture); 
-    //             } else { 
-    //                 self.textures[0] = *texture; 
-    //             }
-    //         },
-    //         MaterialType::UnlitMaterial => {
-    //             eprintln!("Attempted to add a texture to a materail that doesn't support textures")
-    //         }
-    //     }
-    // }
 }
 
 impl PartialEq for Material {

@@ -4,7 +4,7 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use glow::HasContext;
 use image::EncodableLayout;
 
-use crate::{texture::{Texture2D, TextureType}, gl::get_gl, shader::ShaderProgram};
+use crate::{texture::{Texture2D}, gl::get_gl, shader::ShaderProgram};
 
 
 #[derive(Clone)]

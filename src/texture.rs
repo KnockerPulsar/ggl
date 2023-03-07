@@ -22,7 +22,7 @@ pub enum TextureType {
 /// diffuse  => texture_diffuse2 , unit 1
 /// specular => texture_sepcular1, unit 2
 /// emissive => texture_emissive1, unit 3
-#[derive(Copy, Clone, Debug, Hash, Eq)]
+#[derive(Copy, Clone, Debug, Eq)]
 pub struct Texture2D {
     pub native_handle: glow::Texture,
     pub tex_type: TextureType,

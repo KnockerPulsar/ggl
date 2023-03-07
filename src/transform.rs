@@ -31,20 +31,20 @@ impl From<Vec3> for Degree3 {
     }
 }
 
-impl Into<Radian3> for Degree3 {
-    fn into(self) -> Radian3 {
+impl From<Degree3> for Radian3 {
+    fn from(val: Degree3) -> Self {
         Radian3(vec3(
-                self.0.x.to_radians(),
-                self.0.y.to_radians(),
-                self.0.z.to_radians(),
+                val.0.x.to_radians(),
+                val.0.y.to_radians(),
+                val.0.z.to_radians(),
         ))
     }
 }
 
 impl EguiDrawable for Degree3 {
     fn on_egui(&mut self, ui: &mut Ui, _index: usize) -> bool {
-        let changed = float3_slider(&mut self.0, ui);
-        changed
+        
+        float3_slider(&mut self.0, ui)
     }
 }
 
@@ -87,12 +87,12 @@ impl Transform {
     }
 
     pub fn set_rot(&mut self, euler: Degree3) -> &mut Self {
-        self.rot = euler.into();
+        self.rot = euler;
         self.update_model_matrix()
     }
 
     pub fn set_name(&mut self, n: impl Into<String>) -> &mut Self {
-        self.name = String::from(n.into());
+        self.name = n.into();
         self
     }
 

@@ -148,7 +148,7 @@ pub fn models_panel(ui: &mut Ui, object_loader: &mut ObjLoader) -> Option<PathBu
             ui.heading("Loaded Models");
 
             object_loader.models().iter().for_each(|(name, _)| {
-                ui.label(format!("{name}"));
+                ui.label(name.to_string());
             });
 
         });
@@ -157,7 +157,7 @@ pub fn models_panel(ui: &mut Ui, object_loader: &mut ObjLoader) -> Option<PathBu
         ui.heading("Load models");
         ui.group(|ui| {
             if ui.button("Load").clicked() {
-                return rfd::FileDialog::new().add_filter("Object model", &["obj"]).pick_file()
+                rfd::FileDialog::new().add_filter("Object model", &["obj"]).pick_file()
             } else {
                 None
             }

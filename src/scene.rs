@@ -46,7 +46,7 @@ impl Scene {
             vec3(-5., 0., 5.),
         ];
 
-        let cube_data: Vec<Transform> = positions
+        let _cube_data: Vec<Transform> = positions
             .iter()
             .enumerate()
             .map(|(index, pos)| {
@@ -111,7 +111,7 @@ impl Scene {
         //     });
         
         let lit_cube = "lit_cube";
-        let mut ground_lit = object_loader.clone(DEFAULT_CUBE_NAME, lit_cube);
+        let _ground_lit = object_loader.clone(DEFAULT_CUBE_NAME, lit_cube);
         // ground_lit.material = Material::default_lit(texture_loader);
 
         let _ground = ecs

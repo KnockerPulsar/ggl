@@ -5,7 +5,6 @@ extern crate nalgebra_glm as glm;
 use std::{
     cell::{RefCell, RefMut},
     borrow::BorrowMut,
-    convert::identity,
     fmt
 };
 
@@ -199,11 +198,11 @@ impl Ecs {
         let mut comp_vec = self.borrow_comp_vec::<T>()
             .unwrap();
 
-        let mut comp = comp_vec
+        let comp = comp_vec
             .borrow_mut()[entity_id]
             .as_mut().unwrap();
 
-        f(&mut comp)
+        f(comp)
     }
 
     pub fn num_entities(&self) -> usize {
@@ -218,13 +217,9 @@ impl Ecs {
             .iter_mut()
             .enumerate()
             .filter_map(|(id, it)| {
-                match it {
-                    Some(it) => Some((id, it)),
-                    None => None,
-                }
+                it.as_mut().map(|it| (id, it))
             })
-            .map(f)
-            .filter_map(identity)
+            .flat_map(f)
             .collect()
     }
 
