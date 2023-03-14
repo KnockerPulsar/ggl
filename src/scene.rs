@@ -9,7 +9,7 @@ use crate::{
     ecs::Ecs,
     transform::{Transform, Degree3},
     light::*,
-    loaders::*, renderer::Material,
+    loaders::*, renderer::{Material, MaterialType}, texture::{Texture2D, TextureType},
 };
 
 pub struct Scene {
@@ -46,7 +46,7 @@ impl Scene {
             vec3(-5., 0., 5.),
         ];
 
-        let _cube_data: Vec<Transform> = positions
+        let cube_data: Vec<Transform> = positions
             .iter()
             .enumerate()
             .map(|(index, pos)| {
@@ -54,7 +54,7 @@ impl Scene {
             })
             .collect();
 
-        let _up_two = vec3(0., 2., 0.);
+        let up_two = vec3(0., 2., 0.);
 
         // let _spot0 = ecs
         //     .add_entity()
@@ -84,18 +84,35 @@ impl Scene {
         //         cutoff_angles: vec2(20., 30.),
         //     });
         //
-        // let _point0 = ecs
-        //     .add_entity()
-        //     .with(Transform::new(
-        //             positions[0] + up_two,
-        //             Degree3::default(),
-        //             "Point light 0",
-        //     ))
-        //     .with(PointLight {
-        //         enabled: true,
-        //         colors:  LightColors::no_ambient(vec3(2., 0., 0.), 0.1),
-        //         attenuation_constants: vec3(0.2, 0.0, 0.5),
-        //     });
+        
+        let point_billboard_handle: ModelHandle = "point_billboard".into();
+        let _point_model = object_loader.clone(DEFAULT_PLANE_NAME, point_billboard_handle.name());
+
+        let mut point_mat = Material::default_billboard(texture_loader);
+        point_mat.textures[0] = Texture2D::from_native_handle(
+            texture_loader.point_light_texture(),
+            TextureType::Diffuse,
+            1
+        );
+
+        for mesh in &mut object_loader.borrow(point_billboard_handle.name()).meshes {
+           mesh.material = point_mat.clone(); 
+        }
+        
+        let _point0 = ecs
+            .add_entity()
+            .with(Transform::with_scale(
+                    positions[0] + up_two,
+                    Degree3::default(),
+                    vec3(0.1, 0.1, 0.1),
+                    "Point light 0",
+            ))
+            .with(PointLight {
+                enabled: true,
+                colors:  LightColors::no_ambient(vec3(2., 0., 0.), 0.1),
+                attenuation_constants: vec3(0.2, 0.0, 0.5),
+            })
+        .with::<ModelHandle>(point_billboard_handle);
         //
         // let _point1 = ecs
         //     .add_entity()
@@ -112,7 +129,6 @@ impl Scene {
         
         let lit_cube = "lit_cube";
         let _ground_lit = object_loader.clone(DEFAULT_CUBE_NAME, lit_cube);
-        // ground_lit.material = Material::default_lit(texture_loader);
 
         let _ground = ecs
             .add_entity()
@@ -126,13 +142,13 @@ impl Scene {
             ).with::<ModelHandle>(lit_cube.into());
 
 
-        // for cube_transform in cube_data {
-        //     let _model = ecs
-        //         .add_entity()
-        //         .with(cube_transform)
-        //         .with::<ModelHandle>(DEFAULT_CUBE_NAME.into());
-        //     }
-        //
+        for cube_transform in cube_data {
+            let _model = ecs
+                .add_entity()
+                .with(cube_transform)
+                .with::<ModelHandle>(DEFAULT_CUBE_NAME.into());
+        }
+        
         let cam = Camera::new(
             glm::vec3(0.0, 1.0, 5.0f32),
             glm::vec3(0.0, 1.0, 0.0f32),
@@ -157,7 +173,6 @@ impl Scene {
         let bp_handle = "assets/obj/backpack.obj";
         let _ = object_loader.load(bp_handle, texture_loader, shader_loader);
         let bp = object_loader.borrow(bp_handle);
-        bp.change_material(Material::default_lit(texture_loader));
 
         let _backpack = ecs
             .add_entity()

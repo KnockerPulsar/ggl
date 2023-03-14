@@ -4,7 +4,7 @@ use obj::{Obj, ObjError, MtlLibsLoadError};
 
 use crate::loaders::*;
 
-use crate::renderer::{Material};
+use crate::renderer::{Material, MaterialType, RenderCommand};
 use crate::{
     egui_drawable::EguiDrawable,
     texture::{Texture2D, TextureType},
@@ -16,8 +16,6 @@ use crate::{
 pub struct Model {
     pub meshes: Vec<Mesh>,
     pub directory: String,
-
-    pub material: Material
 }
 
 impl Model {
@@ -31,11 +29,6 @@ impl Model {
         Ok(loaded_model)
     }
 
-    pub fn with_material(&mut self, material: Material) -> &mut Self {
-        self.material = material;
-        self
-    }
-
     pub fn add_mesh(&mut self, mesh: Mesh) {
         self.meshes.push(mesh);
     }
@@ -43,11 +36,6 @@ impl Model {
     #[allow(dead_code)]
     pub fn get_mesh(&self, index: usize) -> &Mesh {
         &self.meshes[index]
-    }
-
-    pub fn change_material(&mut self, new_material: Material) -> &mut Self {
-       self.material = new_material;
-       self
     }
 }
 
@@ -97,7 +85,6 @@ impl Model {
         let mut model = Model {
             meshes: Vec::new(),
             directory: String::from(dir.to_str().unwrap()),
-            material: Material::default_unlit(_shader_loader)
         };
 
         for (object_index, object) in objects.data.objects.iter().enumerate()  {
@@ -176,10 +163,17 @@ impl Model {
                 }
             }
 
+            let mat = Material {
+                shader_ref: DEFAULT_LIT_SHADER,
+                material_type: MaterialType::Lit,
+                textures,
+                transparent: false
+            };
+
             model.add_mesh(Mesh::new(
                 pnt,
                 inds,
-                textures
+                mat
             ));
             
         }

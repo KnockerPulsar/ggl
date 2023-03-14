@@ -89,22 +89,11 @@ impl ObjLoader {
         let cube_path = "assets/obj/cube.obj";
 
         let mut cube_model = Model::load_obj(cube_path, texture_loader, shader_loader).unwrap();
-        let _checker_texture = texture_loader.checker_texture();
+        let mat = Material::default_lit(texture_loader);
 
-        cube_model
-        // .add_texture(&Texture2D { 
-        //     native_handle: checker_texture, 
-        //     tex_type: TextureType::Diffuse,
-        //     tex_index: 1,
-        //     tex_unit: 0
-        // })
-        // .add_texture(&Texture2D { 
-        //     native_handle: checker_texture,
-        //     tex_type: TextureType::Specular,
-        //     tex_index: 1,
-        //     tex_unit: 1
-        // })
-        .with_material(Material::default_unlit(shader_loader));
+        for mesh in &mut cube_model.meshes {
+            mesh.material = mat.clone();
+        }
 
         cube_model
     }
@@ -150,23 +139,13 @@ impl ObjLoader {
             2, 1, 3
         ];
         
-        let default_texture = Texture2D::from_native_handle(
-            texture_loader.directional_light_texture(), 
-            TextureType::Diffuse, 1
-        );
 
-        let textures: Vec<Texture2D> = vec![
-            default_texture
-        ];
-        
-        let mesh = Mesh::new(vertices, indices, textures);
-        
-        
+        let mat = Material::default_billboard(texture_loader);
+        let mesh = Mesh::new(vertices, indices, mat);
 
         Model {
             meshes: vec![mesh],
             directory: "".to_string(),
-            material: Material::default_billboard(texture_loader)
         }
     }
 

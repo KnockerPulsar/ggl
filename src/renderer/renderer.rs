@@ -1,12 +1,10 @@
 use std::{
     sync::Arc,
-    collections::HashMap
+    collections::HashMap, convert::identity
 };
 
 use glow::HasContext;
 use glutin::dpi::PhysicalSize;
-
-
 
 use crate::{
     gl::{set_gl, get_gl},
@@ -17,10 +15,11 @@ use crate::{
     light_system,
     transform::Transform,
     model::Model, 
-    texture::Texture2D, 
-    shader::{UniformMap, Uniform}, 
-    map
+    shader::Uniform, 
+    map, mesh::Mesh
 };
+
+use super::material::*;
 
 pub type GlutinWindow = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
@@ -97,115 +96,75 @@ impl Renderer {
             gl.enable(glow::DEPTH_TEST);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
             gl.enable(glow::BLEND);
-            gl.clear_color(0.2, 0.2, 0.2, 1.0);
+            gl.clear_color(0.0, 0.0, 0.0, 1.0);
             gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         }
 
         let default_lit = shader_loader.borrow_shader(DEFAULT_LIT_SHADER);
         light_system(ecs, default_lit, &self.lights_on);
           
-        ecs.do_all::<_, _, RenderCommand>(|model_handle: &mut ModelHandle, transform: &mut Transform| {
+        let rcs: Vec<Option<Vec<RenderCommand>>> = ecs.do_all::<_, _, _>(|model_handle: &mut ModelHandle, transform: &mut Transform| {
             if !model_handle.enabled() { return None; }
-
             let model = object_loader.borrow(model_handle.name());
-            Self::draw_model(shader_loader, transform, camera, model);
 
-            None
+            Some(
+                model.meshes.iter()
+                .map(|m| { RenderCommand(transform.clone(), m.clone()) })
+                .collect::<Vec<RenderCommand>>()
+            )
         });
 
+        let rcs = rcs
+            .iter()
+            .filter(|v| v.is_some())
+            .map(|v| v.as_ref().unwrap())
+            .flatten()
+            .collect::<Vec<_>>();
+
+        let (mut transparent, opaque): (_, Vec<_>) = rcs.into_iter().partition(|rc| rc.1.material.transparent);
+
+        opaque.iter().for_each(|opaque_rc| {
+            let RenderCommand(t, mesh) = opaque_rc;
+            Self::draw_mesh(shader_loader, t, camera, mesh);
+        });
+
+        transparent.sort_by(|tr1, tr2| {
+            let dist1 = (tr1.0.get_pos() - camera.get_pos()).len();
+            let dist2 = (tr2.0.get_pos() - camera.get_pos()).len();
+
+            dist1.cmp(&dist2).reverse()
+        });
+
+        transparent.iter().for_each(|tr_rc| {
+            let RenderCommand(t, mesh) = tr_rc;
+            Self::draw_mesh(shader_loader, t, camera, mesh);
+        });
     }
 
-    pub fn draw_model(shader_loader: &mut ShaderLoader, transform: &Transform, camera: &Camera, model: &mut Model) {
-        let uniforms = match &model.material.material_type {
-            MaterialType::Lit => map! {
-                "projection" => Uniform::Mat4(camera.get_proj_matrix()),
-                "view"       => Uniform::Mat4(camera.get_view_matrix()),
-                "model"      => Uniform::Mat4(transform.get_model_matrix()),
-                "u_view_pos" => Uniform::Vec3(camera.get_pos()),
-                "u_material.shininess" => Uniform::Float(32.0)
-            },
-            MaterialType::Billboard | MaterialType::Unlit => map! {
-                "projection" => Uniform::Mat4(camera.get_proj_matrix()),
-                "view"       => Uniform::Mat4(camera.get_view_matrix()),
-                "model"      => Uniform::Mat4(transform.get_model_matrix())
-            },
+    pub fn draw_mesh(shader_loader: &mut ShaderLoader, transform: &Transform, camera: &Camera, mesh: &Mesh) {
+        let lit_uniforms = map! {
+            "projection" => Uniform::Mat4(camera.get_proj_matrix()),
+            "view"       => Uniform::Mat4(camera.get_view_matrix()),
+            "model"      => Uniform::Mat4(transform.get_model_matrix()),
+            "u_view_pos" => Uniform::Vec3(camera.get_pos()),
+            "u_material.shininess" => Uniform::Float(32.0)
+        };
+        let other_uniforms = map! {
+            "projection" => Uniform::Mat4(camera.get_proj_matrix()),
+            "view"       => Uniform::Mat4(camera.get_view_matrix()),
+            "model"      => Uniform::Mat4(transform.get_model_matrix())
         };
 
-        let prefix = match &model.material.material_type {
-            MaterialType::Lit  => "u_material.",
-            _                          => ""
+        let uniforms = match &mesh.material.material_type {
+            MaterialType::Lit => &lit_uniforms,
+            MaterialType::Billboard | MaterialType::Unlit => &other_uniforms,
         };
 
-        let _shader = shader_loader.borrow_shader(model.material.shader_ref()).use_program();
-        model.material.upload_uniforms(shader_loader, uniforms, "");
-
-        let shader = shader_loader.borrow_shader(model.material.shader_ref()).use_program();
-        for mesh in &model.meshes {
-            mesh.draw(shader, prefix);
-        }
+        mesh.draw(shader_loader, uniforms);
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
-pub enum MaterialType {
-    Unlit,
-    Lit,
-    Billboard
-}
-
-#[derive(Clone, Eq)]
-pub struct Material {
-    shader_ref: &'static str,
-    pub material_type: MaterialType
-}
-
-impl Material {
-    pub fn default_billboard(texture_loader: &mut TextureLoader) -> Self {
-        let directional_light = texture_loader.directional_light_texture();
-        let _diffuse_texture = Texture2D::from_native_handle(
-            directional_light,
-            crate::texture::TextureType::Diffuse,
-            1
-        );
-
-        Material {
-            shader_ref   : DEFAULT_BILLBOARD_SHADER,
-            material_type: MaterialType::Billboard
-        }
-    }
-
-    pub fn default_unlit(_shader_loader: &mut ShaderLoader) -> Self {
-        Material {
-            shader_ref   : DEFAULT_UNLIT_SHADER,
-            material_type: MaterialType::Unlit
-        }
-    }
-
-    pub fn default_lit(_texture_loader: &mut TextureLoader) -> Self {
-        Material {
-            shader_ref   : DEFAULT_LIT_SHADER,
-            material_type: MaterialType::Lit
-        }
-    }
-
-    pub fn shader_ref(&self) -> &'static str {
-        self.shader_ref
-    }
-
-    pub fn upload_uniforms(&self, shader_loader: &mut ShaderLoader, uniforms: UniformMap, prefix: &str) {
-        shader_loader
-            .borrow_shader(self.shader_ref())
-            .upload_uniforms(uniforms, prefix);
-    }
-}
-
-impl PartialEq for Material {
-    fn eq(&self, other: &Self) -> bool {
-        self.shader_ref() == other.shader_ref()
-    }
-}
-
-struct RenderCommand(Transform, Material, ModelHandle);
+pub struct RenderCommand( Transform,  Mesh);
 
 
 // TODO: Fix model loading (textures don't carry over when chaning materials)

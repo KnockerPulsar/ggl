@@ -4,7 +4,7 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use glow::HasContext;
 use image::EncodableLayout;
 
-use crate::{texture::{Texture2D}, gl::get_gl, shader::ShaderProgram};
+use crate::{texture::{Texture2D}, gl::get_gl, shader::{ShaderProgram, UniformMap}, renderer::{Material, MaterialType}, loaders::ShaderLoader};
 
 
 #[derive(Clone)]
@@ -12,7 +12,7 @@ pub struct Mesh {
     // Buffer containing 3 floats for position, 3 for vertex normals, 2 for texture coordinates
     pub vert_data: Vec<f32>,
     pub ind_data: Vec<u32>,
-    pub textures: Vec<Texture2D>,
+    pub material: Material,
 
     vao: glow::VertexArray,
     vbo: glow::Buffer,
@@ -33,13 +33,13 @@ impl Mesh {
     pub fn new(
         vert_data: Vec<f32>,
         ind_data: Vec<u32>,
-        textures: Vec<Texture2D>
+        material: Material
     ) -> Self {
         let gl_rc = get_gl();
         let mut mesh = Mesh {
             vert_data,
             ind_data,
-            textures,
+            material,
 
             vao: unsafe { gl_rc.create_vertex_array().unwrap() },
             vbo: unsafe { gl_rc.create_buffer().unwrap() },
@@ -50,8 +50,16 @@ impl Mesh {
         mesh
     }
 
-    pub fn draw(&self, shader: &ShaderProgram, prefix: &str) {
-        shader.upload_textures(&self.textures, prefix);
+    pub fn draw(&self, shader_loader: &mut ShaderLoader, uniforms: &UniformMap) {
+        let shader = shader_loader.borrow_shader(self.material.shader_ref()).use_program();
+        self.material.upload_uniforms(shader_loader, uniforms, "");
+
+        let prefix = match &self.material.material_type {
+            MaterialType::Lit => "u_material.",
+            _                 => ""
+        };
+
+        self.material.upload_textures(shader_loader, prefix);
 
         unsafe {
             let gl_rc = get_gl();

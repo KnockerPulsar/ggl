@@ -187,11 +187,11 @@ impl TextureLoader {
     }
 
     default_texture_getters![ 
-        (DEFAULT_TEXTURE, default_texture),
-        ("checker_32_32", checker_texture),
-        ("white", white_texture),
-        ("black", black_texture),
-        ("point_light_white", point_light_texture),
+        (DEFAULT_TEXTURE          , default_texture),
+        ("checker_32_32"          , checker_texture),
+        ("white"                  , white_texture),
+        ("black"                  , black_texture),
+        ("point_light_white"      , point_light_texture),
         ("directional_light_white", directional_light_texture)
     ];
 }

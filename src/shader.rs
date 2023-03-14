@@ -82,7 +82,7 @@ impl ShaderProgram {
         unsafe { get_gl().get_uniform_location(self.handle, name) }
     }
 
-    pub fn upload_uniforms(&self, uniforms: UniformMap, prefix: &str) {
+    pub fn upload_uniforms(&self, uniforms: &UniformMap, prefix: &str) {
         uniforms
             .iter()
             .for_each(|(uniform_name, uniform_value)| {
@@ -101,6 +101,7 @@ impl ShaderProgram {
     // `prefix` is for when you have a texture inside a struct for example.
     // You'd have to set the uniform `struct_instance.texture_diffuse1` as an example.
     pub fn upload_textures(&self, textures: &[Texture2D], prefix: &str) {
+        unsafe { get_gl().disable(glow::TEXTURE); }
         for (i, texture) in textures.iter().enumerate() {
             texture.activate_and_bind(i as u32);
 
@@ -109,6 +110,7 @@ impl ShaderProgram {
                 TextureType::Specular => "texture_specular",
                 TextureType::Emissive => "texture_emissive",
             };
+
             let full_name = format!("{prefix}{base_name}{}", texture.tex_index);
             self.set_int(&full_name, i as i32);
         }

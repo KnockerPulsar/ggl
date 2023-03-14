@@ -94,7 +94,8 @@ impl App {
 
     fn app_ui(&mut self) {
         self.glow.run(self.renderer.window.window(), |egui_ctx| {
-            egui::Window::new("ggl").show(egui_ctx, |ui| {
+            egui::Window::new("ggl").default_width(300.).show(egui_ctx, |ui| {
+
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.current_panel, Panels::Entities, "Entities");
                     ui.selectable_value(&mut self.current_panel, Panels::Models, "Models");
