@@ -1,6 +1,6 @@
 use std::{
     sync::Arc,
-    collections::HashMap, convert::identity, rc::Rc
+    collections::HashMap
 };
 
 use glow::HasContext;
@@ -16,7 +16,7 @@ use crate::{
     transform::Transform,
     model::Model, 
     shader::Uniform, 
-    map, mesh::{Mesh, MeshRenderer}
+    map, mesh::{MeshRenderer}
 };
 
 use super::material::*;
@@ -89,7 +89,7 @@ impl Renderer {
         camera: &Camera,
         ecs: &mut Ecs,
         shader_loader: &mut ShaderLoader,
-        object_loader: &mut ObjLoader
+        _object_loader: &mut ObjLoader
     ) {
         let gl = get_gl();
         unsafe {
@@ -117,8 +117,7 @@ impl Renderer {
 
         let rcs = rcs
             .iter()
-            .filter(|v| v.is_some())
-            .map(|v| v.as_ref().unwrap())
+            .filter_map(|v| v.as_ref())
             .flatten()
             .collect::<Vec<_>>();
 
@@ -169,11 +168,10 @@ impl Renderer {
 pub struct RenderCommand(Transform, MeshRenderer);
 
 
-// TODO: Fix model loading (textures don't carry over when chaning materials)
-// TODO: Continue moving rendering/OpenGL related code to the renderer.
-// TODO: Find a way to decouple models, shaders, and textures. MeshRenderer(Model, Shader, &[Texture])? 
+// OpenGL 
+// TODO: Add outlining to objects.
+// TODO: Proper transparency
+
+// Plumbing
 // TODO: Perhaps change UniformMap to an array of tuples?
 // Also, add support for recursion so nested structs won't be as painful.
-// TODO: Store meshes in ObjLoader
-// and store only their indices for easier copying.
-// TODO: Proper transparency

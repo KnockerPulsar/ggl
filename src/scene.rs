@@ -1,6 +1,6 @@
 extern crate nalgebra_glm as glm;
 
-use std::rc::Rc;
+
 
 use egui_gizmo::GizmoMode;
 use glm::{vec3, vec2, Vec3};
@@ -11,7 +11,7 @@ use crate::{
     ecs::Ecs,
     transform::{Transform, Degree3},
     light::*,
-    loaders::{*, utils::Handle}, renderer::{Material, MaterialType}, texture::{Texture2D, TextureType}, model::Model,
+    loaders::{*, utils::Handle}, renderer::{Material}, texture::{Texture2D, TextureType}, model::Model,
 };
 
 pub struct Scene {
@@ -36,12 +36,12 @@ impl Scene {
         window_width: i32, 
         window_height: i32,
         texture_loader: &mut TextureLoader, 
-        shader_loader: &mut ShaderLoader, 
+        _shader_loader: &mut ShaderLoader, 
         object_loader: &mut ObjLoader
     ) -> Self {
 
         let mut ecs = Ecs::new();
-        let up_two = vec3(0., 2., 0.);
+        let _up_two = vec3(0., 2., 0.);
 
         // let _spot0 = ecs
         //     .add_entity()
@@ -75,7 +75,7 @@ impl Scene {
         let pl_tex = Texture2D::from_native_handle(texture_loader.point_light_texture(), TextureType::Diffuse, 1);
         let pl_mat = Material::billboard(pl_tex);
         let pl_name = "Point light billboard";
-        let mut pl_model = object_loader.clone(DEFAULT_PLANE_NAME, pl_name);
+        let pl_model = object_loader.clone(DEFAULT_PLANE_NAME, pl_name);
 
         for mr in &mut pl_model.borrow_mut().mesh_renderers {
            mr.set_material(pl_mat.clone());

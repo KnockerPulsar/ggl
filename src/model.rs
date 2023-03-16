@@ -33,7 +33,7 @@ impl Model {
     }
 }
 
-impl<'a> EguiDrawable for Model {
+impl EguiDrawable for Model {
     fn on_egui(&mut self, ui: &mut egui::Ui, index: usize) -> bool {
         enabled_header!(self, ui, "Model", index, {
             ui.horizontal(|ui| {
@@ -48,7 +48,7 @@ impl<'a> EguiDrawable for Model {
                 }
             });
 
-            ui.vertical(|ui| {
+            ui.vertical(|_ui| {
 
             });
         });

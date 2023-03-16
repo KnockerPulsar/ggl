@@ -4,15 +4,15 @@ extern crate itertools;
 extern crate obj;
 extern crate byteorder;
 
-use std::{collections::HashMap, rc::Rc, cell::{RefCell, Ref}, ops::{Deref, DerefMut}};
+use std::{collections::HashMap, rc::Rc};
 
 use obj::Obj;
 
 use crate::{
     texture::{Texture2D, TextureType},
     model::{Model, ObjLoadError}, 
-    mesh::{Mesh, MeshRenderer}, egui_drawable::EguiDrawable,
-    loaders::*, enabled_header, renderer::{Material, MaterialType}, map
+    mesh::{Mesh, MeshRenderer},
+    loaders::*, renderer::{Material, MaterialType}, map
 };
 
 use self::utils::Handle;
@@ -199,7 +199,7 @@ impl ObjLoader {
         //   add the clone under the new name
         //   return the clone's reference
 
-        let clone_name = if self.models.contains_key(old_name.into()) {
+        let clone_name = if self.models.contains_key(old_name) {
             old_name
         } else {
             DEFAULT_CUBE_NAME
@@ -247,7 +247,7 @@ impl ObjLoader {
 
         let mut model = { 
             let dir = String::from(dir.to_str().unwrap());
-            Model::new(dir.clone(), dir.clone(), Vec::new())
+            Model::new(dir.clone(), dir, Vec::new())
         };
         let num_objects = objects.data.objects.len() as f32;
 
@@ -337,6 +337,6 @@ impl ObjLoader {
             model.add_mesh(MeshRenderer::new(mesh, mat));
         }
 
-        Ok(self.add_model(name.clone(), model))
+        Ok(self.add_model(name, model))
     }
 }

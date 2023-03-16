@@ -124,7 +124,7 @@ fn entity_selection(ui: &mut Ui, ecs: &mut Ecs) -> (Option<usize>, bool) {
 pub fn entities_panel(
     ui: &mut Ui,
     scene: &mut Scene,
-    lights_on: &mut bool
+    _lights_on: &mut bool
 ) -> (Option<usize>, bool, bool) {
     // ui.spacing();
 

@@ -4,14 +4,14 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use glow::HasContext;
 use image::EncodableLayout;
 
-use crate::{texture::{Texture2D}, gl::get_gl, shader::{ShaderProgram, UniformMap}, renderer::{Material, MaterialType}, loaders::ShaderLoader};
+use crate::{gl::get_gl, shader::{UniformMap}, renderer::{Material, MaterialType}, loaders::ShaderLoader};
 use std::hash::{Hasher, Hash};
 
 #[derive(Hash)]
 #[derive(Clone)]
 pub struct MeshRenderer(pub Rc<Mesh>, pub Material);
 
-impl<'a> MeshRenderer {
+impl MeshRenderer {
     pub fn new(mesh: Rc<Mesh>, material: Material) -> Self {
         Self ( mesh, material )
     }
@@ -19,7 +19,7 @@ impl<'a> MeshRenderer {
     pub fn draw(&self, shader_loader: &mut ShaderLoader, uniforms: &UniformMap) {
         let MeshRenderer(mesh, material) = self;
 
-        let shader = shader_loader.borrow_shader(material.shader_ref()).use_program();
+        let _shader = shader_loader.borrow_shader(material.shader_ref()).use_program();
         material.upload_uniforms(shader_loader, uniforms, "");
 
         let prefix = match material.material_type {

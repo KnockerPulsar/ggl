@@ -1,11 +1,11 @@
-use std::rc::Rc;
+
 use std::{sync::Arc, env};
 
 use glutin::{event::*, event_loop::ControlFlow};
 
 
 use crate::loaders::utils::Handle;
-use crate::model::Model;
+
 use crate::{
     add_component, 
     ui::*, 
