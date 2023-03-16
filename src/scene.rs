@@ -36,7 +36,7 @@ impl Scene {
         window_width: i32, 
         window_height: i32,
         texture_loader: &mut TextureLoader, 
-        _shader_loader: &mut ShaderLoader, 
+        shader_loader: &mut ShaderLoader, 
         object_loader: &mut ObjLoader
     ) -> Self {
 
@@ -73,7 +73,7 @@ impl Scene {
         //
         
         let pl_tex = Texture2D::from_native_handle(texture_loader.point_light_texture(), TextureType::Diffuse, 1);
-        let pl_mat = Material::billboard(pl_tex);
+        let pl_mat = Material::billboard(shader_loader, pl_tex);
         let pl_name = "Point light billboard";
         let pl_model = object_loader.clone(DEFAULT_PLANE_NAME, pl_name);
 

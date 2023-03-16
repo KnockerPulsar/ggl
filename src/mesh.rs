@@ -16,18 +16,18 @@ impl MeshRenderer {
         Self ( mesh, material )
     }
 
-    pub fn draw(&self, shader_loader: &mut ShaderLoader, uniforms: &UniformMap) {
+    pub fn draw(&self, uniforms: &UniformMap) {
         let MeshRenderer(mesh, material) = self;
 
-        let _shader = shader_loader.borrow_shader(material.shader_ref()).use_program();
-        material.upload_uniforms(shader_loader, uniforms, "");
+        material.shader.use_program();
+        material.upload_uniforms(uniforms, "");
 
         let prefix = match material.material_type {
             MaterialType::Lit          => "u_material.",
             _                          => ""
         };
 
-        material.upload_textures(shader_loader, prefix);
+        material.upload_textures(prefix);
 
         unsafe {
             let gl_rc = get_gl();

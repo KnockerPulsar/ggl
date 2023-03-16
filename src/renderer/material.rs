@@ -1,7 +1,9 @@
+use std::rc::Rc;
+
 use crate::{
     loaders::*,
     texture::{Texture2D, TextureType}, 
-    shader::UniformMap, 
+    shader::{UniformMap, ShaderProgram, self}, 
 };
 
 #[allow(dead_code)]
@@ -14,19 +16,28 @@ pub enum MaterialType {
 
 #[derive(Hash, Clone, Eq)]
 pub struct Material {
-    pub shader_ref: &'static str,
+    pub shader: Rc<ShaderProgram>,
     pub material_type: MaterialType,
     pub textures: Vec<Texture2D>,
     pub transparent: bool
 }
 
 impl Material {
-    pub fn billboard(tex: Texture2D) -> Self {
+    pub fn billboard(shader_loader: &mut ShaderLoader, tex: Texture2D) -> Self {
         Material {
-            shader_ref   : DEFAULT_BILLBOARD_SHADER,
+            shader : shader_loader.get_shader_rc(DEFAULT_BILLBOARD_SHADER),
             material_type: MaterialType::Billboard,
             textures     : vec![tex],
             transparent  : true
+        }
+    }
+
+    pub fn lit(shader_loader: &mut ShaderLoader, textures: Vec<Texture2D>) -> Self {
+        Material {
+            shader   : shader_loader.get_shader_rc(DEFAULT_LIT_SHADER),
+            material_type: MaterialType::Lit,
+            transparent  : false,
+            textures
         }
     }
 
@@ -34,7 +45,7 @@ impl Material {
         self.textures = new_tex;
     }
 
-    pub fn default_billboard(texture_loader: &mut TextureLoader) -> Self {
+    pub fn default_billboard(shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Self {
         let directional_light = texture_loader.directional_light_texture();
         let diffuse_texture = Texture2D::from_native_handle(
             directional_light,
@@ -42,19 +53,19 @@ impl Material {
             1
         );
 
-        Self::billboard(diffuse_texture)
+        Self::billboard(shader_loader, diffuse_texture)
     }
 
-    pub fn default_unlit(_shader_loader: &mut ShaderLoader) -> Self {
+    pub fn default_unlit(shader_loader: &mut ShaderLoader) -> Self {
         Material {
-            shader_ref   : DEFAULT_UNLIT_SHADER,
+            shader   : shader_loader.get_shader_rc(DEFAULT_UNLIT_SHADER),
             material_type: MaterialType::Unlit,
             textures     : vec![],
             transparent  : false
         }
     }
 
-    pub fn default_lit(texture_loader: &mut TextureLoader) -> Self {
+    pub fn default_lit(shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Self {
         let checker_diffuse = Texture2D::from_native_handle(
             texture_loader.checker_texture(),
             TextureType::Diffuse,
@@ -67,32 +78,20 @@ impl Material {
             1
         );
 
-        Material {
-            shader_ref   : DEFAULT_LIT_SHADER,
-            material_type: MaterialType::Lit,
-            textures     : vec![checker_diffuse, white_specular],
-            transparent  : false
-        }
+        Self::lit(shader_loader, vec![checker_diffuse, white_specular])
     }
 
-    pub fn shader_ref(&self) -> &'static str {
-        self.shader_ref
+    pub fn upload_uniforms(&self, uniforms: &UniformMap, prefix: &str) {
+        self.shader.upload_uniforms(uniforms, prefix);
     }
 
-    pub fn upload_uniforms(&self, shader_loader: &mut ShaderLoader, uniforms: &UniformMap, prefix: &str) {
-        shader_loader
-            .borrow_shader(self.shader_ref())
-            .upload_uniforms(uniforms, prefix);
-    }
-
-    pub(crate) fn upload_textures(&self, shader_loader: &mut ShaderLoader, prefix: &str) {
-        let shader = shader_loader.borrow_shader(self.shader_ref);
-        shader.upload_textures(&self.textures, prefix);
+    pub fn upload_textures(&self, prefix: &str) {
+        self.shader.upload_textures(&self.textures, prefix); 
     }
 }
 
 impl PartialEq for Material {
     fn eq(&self, other: &Self) -> bool {
-        self.shader_ref() == other.shader_ref()
+        self.shader == other.shader
     }
 }

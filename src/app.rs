@@ -1,11 +1,14 @@
 
 use std::{sync::Arc, env};
 
+use glow::HasContext;
 use glutin::{event::*, event_loop::ControlFlow};
 
 
+use crate::gl::set_gl;
 use crate::loaders::utils::Handle;
 
+use crate::renderer::GlutinWindow;
 use crate::{
     add_component, 
     ui::*, 
@@ -41,17 +44,53 @@ pub struct App {
     input: InputSystem,
 
     last_frame: std::time::Instant,
+    cumulative_time: std::time::Instant,
     current_panel: Panels
 }
 
 impl App {
+    fn init_window(window_width: i32, window_height: i32, event_loop: &EventLoop) -> GlutinWindow {
+        let window = {
+            let window_builder = glutin::window::WindowBuilder::new()
+                .with_title("GG OpenGl")
+                .with_inner_size(glutin::dpi::LogicalSize::new(window_width, window_height));
+
+            unsafe {
+                let window = glutin::ContextBuilder::new()
+                    .with_depth_buffer(24)
+                    .with_vsync(true)
+                    .with_hardware_acceleration(Some(true))
+                    .build_windowed(window_builder, event_loop)
+                    .unwrap()
+                    .make_current()
+                    .unwrap();
+
+                window
+            }
+        };
+
+        window
+    }
+
+    fn init_opengl(window: &GlutinWindow, width: i32, height: i32) {
+        unsafe {
+            let gl =
+                glow::Context::from_loader_function(|s| window.get_proc_address(s) as *const _);
+            let gl = set_gl(Arc::new(gl));
+            gl.viewport(0, 0, width, height);
+        }
+    }
+
     pub fn init(
         window_width: usize, 
         window_height: usize,
     ) -> (App, glutin::event_loop::EventLoop<()>) {
 
+        let cumulative_time = std::time::Instant::now();
         let event_loop: EventLoop = glutin::event_loop::EventLoopBuilder::with_user_event().build();
-        let renderer = Renderer::new(window_width, window_height, &event_loop);
+        let window = Self::init_window(window_width as i32, window_height as i32, &event_loop);
+
+        Self::init_opengl(&window, window_width as i32, window_height as i32);
         let egui_glow = egui_glow::EguiGlow::new(&event_loop, Arc::clone(get_gl()));
 
         println!(
@@ -61,9 +100,7 @@ impl App {
 
         println!("Loading, please wait...");
 
-        let custom_shaders = [ ];
-
-        let mut shader_loader = ShaderLoader::new(&custom_shaders);
+        let mut shader_loader = ShaderLoader::new(&[]);
         let mut texture_loader = TextureLoader::new();
         let object_loader = ObjLoader::new(&mut shader_loader, &mut texture_loader);
 
@@ -71,6 +108,7 @@ impl App {
         let last_frame = std::time::Instant::now();
         let input = InputSystem::new();
 
+        let mut renderer = Renderer::new(window, window_width, window_height, &mut shader_loader);
 
         let empty_scene = Scene::empty(window_width as i32, window_height as i32);
         let app = App {
@@ -85,7 +123,8 @@ impl App {
             input,
 
             last_frame,
-            current_panel: Panels::Entities
+            current_panel: Panels::Entities,
+            cumulative_time
         };
 
         (app, event_loop)
@@ -239,10 +278,10 @@ impl App {
                 self.current_scene.camera.update(&mut self.input);
 
                 self.renderer.render(
-                    &self.current_scene.camera,
+                    &mut self.current_scene.camera,
                     &mut self.current_scene.ecs,
                     &mut self.shader_loader,
-                    &mut self.object_loader
+                    (current_frame-self.cumulative_time).as_secs_f32()
                 );
 
                 self.app_ui();

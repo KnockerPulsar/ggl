@@ -35,7 +35,7 @@ impl Texture2D {
         tex_type: TextureType, 
         tex_index: u32,
     ) -> Texture2D {
-        // assert!( tex_index > 0, "Texture indices must be > 1 (Or change them in the shader to start from 0)" );
+        assert!( tex_index > 0, "Texture indices must be > 1 (Or change them in the shader to start from 0)" );
         Texture2D {
             native_handle: tex_handle,
             tex_type,

@@ -32,7 +32,7 @@ pub enum Uniform {
     Mat4(Mat4),
 }
 
-#[derive(Debug, Eq)]
+#[derive(Hash, Debug, Eq)]
 pub struct ShaderProgram {
     pub handle: glow::Program,
 }

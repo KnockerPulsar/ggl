@@ -104,6 +104,10 @@ impl Transform {
         &self.pos
     }
 
+    pub fn get_rot(&self) -> Degree3 {
+        self.rot
+    }
+
     pub fn get_model_matrix(&self) -> glm::Mat4 {
         self.model
     }

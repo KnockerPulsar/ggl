@@ -68,14 +68,14 @@ impl ObjLoader {
         let cube_path = "assets/obj/cube.obj";
 
         let cube_model = self.load_obj(DEFAULT_CUBE_NAME, cube_path, texture_loader, shader_loader).unwrap();
-        let mat = Material::default_lit(texture_loader);
+        let mat = Material::default_lit(shader_loader, texture_loader);
 
         for mr in &mut cube_model.borrow_mut().mesh_renderers {
             mr.set_material(mat.clone());
         }
     }
 
-    fn load_default_plane(&mut self, _shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) {
+    fn load_default_plane(&mut self, shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) {
         
         //                   ^
         //  (-0.5, 0.5, 0)   |       (0.5, 0.5, 0)     
@@ -117,7 +117,7 @@ impl ObjLoader {
         ];
         
 
-        let mat = Material::default_billboard(texture_loader);
+        let mat = Material::default_billboard(shader_loader, texture_loader);
         let t = self.add_mesh(DEFAULT_PLANE_NAME.into(), Mesh::new(vertices, indices));
         self.add_model(
             DEFAULT_PLANE_NAME, 
@@ -230,7 +230,7 @@ impl ObjLoader {
         name: impl Into<String>,
         path: impl Into<String>,
         texture_loader: &mut TextureLoader,
-        _shader_loader: &mut ShaderLoader,
+        shader_loader: &mut ShaderLoader,
     ) -> Result<Handle<Model>, ObjLoadError> {
         
         let mut objects = Obj::load(path.into())?;
@@ -325,12 +325,7 @@ impl ObjLoader {
                 }
             }
 
-            let mat = Material {
-                shader_ref: DEFAULT_LIT_SHADER,
-                material_type: MaterialType::Lit,
-                textures,
-                transparent: false
-            };
+            let mat = Material::lit(shader_loader, textures);
 
             
             let mesh = self.add_mesh(name.clone(), Mesh::new(pnt, inds));

@@ -22,7 +22,7 @@ void main() {
     vec3 billboard_center = vec3(model[0][3], model[1][3], model[2][3]);
     vec2 scale = vec2(model[0][0], model[1][1]);
 
-    gl_Position = projection * view * model * vec4( billboard_center, 1 );
+    gl_Position = projection * view * vec4( billboard_center, 1 );
     gl_Position /= abs(gl_Position.w);
 
     gl_Position.xy += aPos.xy * scale;
