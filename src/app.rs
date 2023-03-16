@@ -1,8 +1,11 @@
+use std::rc::Rc;
 use std::{sync::Arc, env};
 
 use glutin::{event::*, event_loop::ControlFlow};
 
 
+use crate::loaders::utils::Handle;
+use crate::model::Model;
 use crate::{
     add_component, 
     ui::*, 
@@ -94,12 +97,23 @@ impl App {
 
     fn app_ui(&mut self) {
         self.glow.run(self.renderer.window.window(), |egui_ctx| {
-            egui::Window::new("ggl").default_width(300.).show(egui_ctx, |ui| {
+            egui::Window::new("ggl")
+                .hscroll(false)
+                .vscroll(false)
+                .default_width(400.0)
+                .default_height(250.0)
+                .show(egui_ctx, |ui| {
 
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.current_panel, Panels::Entities, "Entities");
-                    ui.selectable_value(&mut self.current_panel, Panels::Models, "Models");
-                });
+                egui::TopBottomPanel::top("")
+                    .resizable(false)
+                    .default_height(35.0)
+                    .show_inside(ui, |ui| {
+
+                        ui.horizontal(|ui| {
+                            ui.selectable_value(&mut self.current_panel, Panels::Entities, "Entities");
+                            ui.selectable_value(&mut self.current_panel, Panels::Models, "Models");
+                        });
+                    });
 
                 selected_entity_gizmo(egui_ctx, &mut self.current_scene, &self.input);
 
@@ -135,9 +149,19 @@ impl App {
                         let str_path = path.to_str().unwrap();
                         let transform = Transform::with_name(str_path);
 
-                        let loaded_model = self.object_loader.load(str_path, &mut self.texture_loader, &mut self.shader_loader);
+                        let model_name = format!("Model {}", self.object_loader.models().len());
+                        let loaded_model = 
+                            self.object_loader.load_model(model_name, str_path, &mut self.texture_loader, &mut self.shader_loader);
+
                         match loaded_model {
-                            Ok(_) => { self.current_scene.ecs.add_entity().with(transform).with::<ModelHandle>(str_path.into()); },
+                            Ok(model_rc) => { 
+                                self
+                                    .current_scene
+                                    .ecs
+                                    .add_entity()
+                                    .with(transform)
+                                    .with(Handle::clone(&model_rc)); 
+                            },
                             Err(_) => eprintln!("Failed to load model at \"{str_path}\""),
                         };
                     }
@@ -150,6 +174,7 @@ impl App {
     }
 
     fn handle_events(
+
         &mut self,
         event: Event<()>, 
         control_flow: &mut glutin::event_loop::ControlFlow,
@@ -213,15 +238,6 @@ impl App {
 
                 self.current_scene.camera.update(&mut self.input);
 
-
-                self.current_scene.ecs.do_all_some::<ModelHandle, ()>(|(_id, model_handle)| {
-                    self.object_loader.load(model_handle.name(), &mut self.texture_loader, &mut self.shader_loader).unwrap_or_else(|e| {
-                        eprintln!("Error: {e:?}");
-                    });
-                    None
-                });
-
-
                 self.renderer.render(
                     &self.current_scene.camera,
                     &mut self.current_scene.ecs,
@@ -249,3 +265,7 @@ impl App {
         (&mut self.texture_loader, &mut self.object_loader, &mut self.shader_loader)
     }
 }
+
+// TODO: Adding models to entities
+// TODO: Material list
+// TODO: Texture list

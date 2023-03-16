@@ -155,7 +155,7 @@ impl Ecs {
         None
     }
 
-    pub fn do_n<T , U, V>(&self, mut f: impl (FnMut(&mut T, &mut U) -> Option<V>), n: usize)
+    pub fn do_n_mut<T , U, V>(&self, mut f: impl (FnMut(&mut T, &mut U) -> Option<V>), n: usize)
         -> Vec<Option<V>>
         where T: 'static, U: 'static
     {
@@ -175,8 +175,35 @@ impl Ecs {
             .collect()
     }
 
-    pub fn do_all<T , U, V>(&self, f: impl (FnMut(&mut T, &mut U) -> Option<V>)) 
+    pub fn do_n<T , U, V>(&self, f: impl (Fn(&T, &U) -> Option<V>), n: usize)
+        -> Vec<Option<V>>
+        where T: 'static, U: 'static
+    {
+        let (Some(t), Some(u)) = (self.borrow_comp_vec::<T>(), self.borrow_comp_vec::<U>()) else {
+            // use std::any::type_name;
+            // println!("do_all: Component type {:?} or {:?} not found", type_name::<T>(), type_name::<U>());
+            return vec![];
+        };
 
+        t 
+            .iter()
+            .zip(u.iter())
+            .filter(|(x,y)| x.is_some() && y.is_some())
+            .map(|(x,y)| (x.as_ref().unwrap(), y.as_ref().unwrap()))
+            .take(n)
+            .map(|(x,y)| f(x, y))
+            .collect()
+    }
+
+    pub fn do_all_mut<T , U, V>(&self, f: impl (FnMut(&mut T, &mut U) -> Option<V>)) 
+
+        -> Vec<Option<V>>
+        where T: 'static, U: 'static 
+    {
+        self.do_n_mut(f, self.entity_count)
+    }
+
+    pub fn do_all<T , U, V>(&self, f: impl (Fn(&T, &U) -> Option<V>)) 
         -> Vec<Option<V>>
         where T: 'static, U: 'static 
     {
@@ -187,7 +214,7 @@ impl Ecs {
         -> Option<V>
         where T: 'static, U: 'static 
     {
-        self.do_n(f, 1).pop().unwrap_or(None)
+        self.do_n_mut(f, 1).pop().unwrap_or(None)
     }
 
     pub fn do_entity<T, U>(&self, entity_id: usize, mut f: impl (FnMut(&mut T) -> U)) -> U
@@ -245,7 +272,7 @@ impl<'a> EntityBuilder<'a> {
     }
 
     pub fn with<ComponentType>( &mut self, comp: ComponentType) -> &mut Self 
-        where ComponentType: 'static + Default + Clone + EguiDrawable
+        where ComponentType: 'static + Clone + EguiDrawable
     {
         self.ecs.add_comp_to_entity(self.entity_id, comp);
         self

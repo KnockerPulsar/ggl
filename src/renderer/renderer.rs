@@ -1,6 +1,6 @@
 use std::{
     sync::Arc,
-    collections::HashMap, convert::identity
+    collections::HashMap, convert::identity, rc::Rc
 };
 
 use glow::HasContext;
@@ -10,13 +10,13 @@ use crate::{
     gl::{set_gl, get_gl},
     app::EventLoop,
     camera::Camera,
-    loaders::*,
+    loaders::{*, utils::Handle},
     ecs::Ecs,
     light_system,
     transform::Transform,
     model::Model, 
     shader::Uniform, 
-    map, mesh::Mesh
+    map, mesh::{Mesh, MeshRenderer}
 };
 
 use super::material::*;
@@ -103,14 +103,15 @@ impl Renderer {
         let default_lit = shader_loader.borrow_shader(DEFAULT_LIT_SHADER);
         light_system(ecs, default_lit, &self.lights_on);
           
-        let rcs: Vec<Option<Vec<RenderCommand>>> = ecs.do_all::<_, _, _>(|model_handle: &mut ModelHandle, transform: &mut Transform| {
-            if !model_handle.enabled() { return None; }
-            let model = object_loader.borrow(model_handle.name());
+        let rcs: Vec<Option<Vec<_>>> = 
+            ecs.do_all(|model_handle: &Handle<Model>, transform: &Transform| {
+            let model_handle = model_handle.borrow();
+            if !model_handle.enabled { return None; }
 
             Some(
-                model.meshes.iter()
-                .map(|m| { RenderCommand(transform.clone(), m.clone()) })
-                .collect::<Vec<RenderCommand>>()
+                model_handle.mesh_renderers.iter()
+                .map(|mr| { RenderCommand(transform.clone(), mr.clone()) })
+                .collect::<Vec<_>>()
             )
         });
 
@@ -121,7 +122,8 @@ impl Renderer {
             .flatten()
             .collect::<Vec<_>>();
 
-        let (mut transparent, opaque): (_, Vec<_>) = rcs.into_iter().partition(|rc| rc.1.material.transparent);
+        let (mut transparent, opaque): 
+            (Vec<_>, Vec<_>) = rcs.into_iter().partition(|rc| rc.1.is_transparent());
 
         opaque.iter().for_each(|opaque_rc| {
             let RenderCommand(t, mesh) = opaque_rc;
@@ -141,7 +143,7 @@ impl Renderer {
         });
     }
 
-    pub fn draw_mesh(shader_loader: &mut ShaderLoader, transform: &Transform, camera: &Camera, mesh: &Mesh) {
+    pub fn draw_mesh(shader_loader: &mut ShaderLoader, transform: &Transform, camera: &Camera, mr: &MeshRenderer) {
         let lit_uniforms = map! {
             "projection" => Uniform::Mat4(camera.get_proj_matrix()),
             "view"       => Uniform::Mat4(camera.get_view_matrix()),
@@ -155,16 +157,16 @@ impl Renderer {
             "model"      => Uniform::Mat4(transform.get_model_matrix())
         };
 
-        let uniforms = match &mesh.material.material_type {
+        let uniforms = match &mr.1.material_type {
             MaterialType::Lit => &lit_uniforms,
             MaterialType::Billboard | MaterialType::Unlit => &other_uniforms,
         };
 
-        mesh.draw(shader_loader, uniforms);
+        mr.draw(shader_loader, uniforms);
     }
 }
 
-pub struct RenderCommand( Transform,  Mesh);
+pub struct RenderCommand(Transform, MeshRenderer);
 
 
 // TODO: Fix model loading (textures don't carry over when chaning materials)

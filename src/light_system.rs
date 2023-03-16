@@ -17,7 +17,7 @@ pub fn light_subsystem<T: Light>(
     where T: 'static
 {
     let mut enabled_light_index = 0;
-    ecs.do_all::<Transform, T, ()>(|transform, light| {
+    ecs.do_all_mut::<Transform, T, ()>(|transform, light| {
         light.upload_data(
             transform,
             &format!("{}[{}]", u_light_array, enabled_light_index),

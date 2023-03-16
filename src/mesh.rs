@@ -1,22 +1,70 @@
-use std::mem::size_of;
+use std::{mem::size_of, rc::Rc};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use glow::HasContext;
 use image::EncodableLayout;
 
 use crate::{texture::{Texture2D}, gl::get_gl, shader::{ShaderProgram, UniformMap}, renderer::{Material, MaterialType}, loaders::ShaderLoader};
+use std::hash::{Hasher, Hash};
 
+#[derive(Hash)]
+#[derive(Clone)]
+pub struct MeshRenderer(pub Rc<Mesh>, pub Material);
+
+impl<'a> MeshRenderer {
+    pub fn new(mesh: Rc<Mesh>, material: Material) -> Self {
+        Self ( mesh, material )
+    }
+
+    pub fn draw(&self, shader_loader: &mut ShaderLoader, uniforms: &UniformMap) {
+        let MeshRenderer(mesh, material) = self;
+
+        let shader = shader_loader.borrow_shader(material.shader_ref()).use_program();
+        material.upload_uniforms(shader_loader, uniforms, "");
+
+        let prefix = match material.material_type {
+            MaterialType::Lit          => "u_material.",
+            _                          => ""
+        };
+
+        material.upload_textures(shader_loader, prefix);
+
+        unsafe {
+            let gl_rc = get_gl();
+            gl_rc.bind_vertex_array(Some(mesh.vao));
+            gl_rc.draw_elements(
+                glow::TRIANGLES,
+                mesh.ind_data.len() as i32,
+                glow::UNSIGNED_INT,
+                0,
+            );
+        }
+    }
+
+    pub fn set_material(&mut self, mat: Material) {
+        self.1 = mat;
+    }
+
+    pub fn is_transparent(&self) -> bool { self.1.transparent }
+}
 
 #[derive(Clone)]
 pub struct Mesh {
     // Buffer containing 3 floats for position, 3 for vertex normals, 2 for texture coordinates
     pub vert_data: Vec<f32>,
     pub ind_data: Vec<u32>,
-    pub material: Material,
 
     vao: glow::VertexArray,
     vbo: glow::Buffer,
     ebo: glow::Buffer,
+}
+
+impl Hash for Mesh {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.vao.hash(state);
+        self.vbo.hash(state);
+        self.ebo.hash(state);
+    }
 }
 
 fn to_bytes(vu32: &mut Vec<u32>) -> Vec<u8> {
@@ -32,14 +80,12 @@ fn to_bytes(vu32: &mut Vec<u32>) -> Vec<u8> {
 impl Mesh {
     pub fn new(
         vert_data: Vec<f32>,
-        ind_data: Vec<u32>,
-        material: Material
+        ind_data: Vec<u32>
     ) -> Self {
         let gl_rc = get_gl();
         let mut mesh = Mesh {
             vert_data,
             ind_data,
-            material,
 
             vao: unsafe { gl_rc.create_vertex_array().unwrap() },
             vbo: unsafe { gl_rc.create_buffer().unwrap() },
@@ -48,29 +94,6 @@ impl Mesh {
 
         mesh.setup_mesh();
         mesh
-    }
-
-    pub fn draw(&self, shader_loader: &mut ShaderLoader, uniforms: &UniformMap) {
-        let shader = shader_loader.borrow_shader(self.material.shader_ref()).use_program();
-        self.material.upload_uniforms(shader_loader, uniforms, "");
-
-        let prefix = match &self.material.material_type {
-            MaterialType::Lit => "u_material.",
-            _                 => ""
-        };
-
-        self.material.upload_textures(shader_loader, prefix);
-
-        unsafe {
-            let gl_rc = get_gl();
-            gl_rc.bind_vertex_array(Some(self.vao));
-            gl_rc.draw_elements(
-                glow::TRIANGLES,
-                self.ind_data.len() as i32,
-                glow::UNSIGNED_INT,
-                0,
-            );
-        }
     }
 
     fn setup_mesh(&mut self) {

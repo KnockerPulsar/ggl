@@ -4,42 +4,53 @@ extern crate itertools;
 extern crate obj;
 extern crate byteorder;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc, cell::{RefCell, Ref}, ops::{Deref, DerefMut}};
+
+use obj::Obj;
 
 use crate::{
     texture::{Texture2D, TextureType},
     model::{Model, ObjLoadError}, 
-    mesh::Mesh, egui_drawable::EguiDrawable,
-    loaders::*, enabled_header, renderer::Material
+    mesh::{Mesh, MeshRenderer}, egui_drawable::EguiDrawable,
+    loaders::*, enabled_header, renderer::{Material, MaterialType}, map
 };
 
-#[derive(Debug, Clone, Default)]
-pub struct ModelHandle {
-    name: String,
-    enabled: bool
-}
+use self::utils::Handle;
 
-impl From<String> for ModelHandle {
-    fn from(name: String) -> Self {
-        ModelHandle { name, enabled: true }
+pub mod utils {
+    use std::{ops::{Deref, DerefMut}, rc::Rc, cell::RefCell};
+
+    use crate::egui_drawable::EguiDrawable;
+
+    pub struct Handle<T>(Rc<RefCell<T>>);
+
+    impl<T> Handle<T> {
+        pub fn new(t: T) -> Self {
+            Handle(Rc::new(RefCell::new(t)))
+        }
+    }
+
+    impl<T> Deref for Handle<T> {
+        type Target=RefCell<T>;
+
+        fn deref(&self) -> &Self::Target {
+            self.0.deref()
+        }
+    }
+
+    impl<T: Clone> Clone for Handle<T> {
+        fn clone(&self) -> Self {
+            Handle(Rc::clone(&self.0))
+        }
+    }
+
+    impl<T: EguiDrawable> EguiDrawable for Handle<T> {
+        fn on_egui(&mut self, ui: &mut egui::Ui, index: usize) -> bool {
+            self.0.deref().borrow_mut().deref_mut().on_egui(ui, index)
+        }
     }
 }
 
-impl From<&str> for ModelHandle {
-    fn from(name: &str) -> Self {
-        ModelHandle { name: name.into(), enabled: true }
-    }
-}
-
-impl ModelHandle {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn enabled(&self) -> bool {
-        self.enabled
-    }
-}
 
 pub type ModelLoadResult<T> = std::result::Result<T, ObjLoadError>;
 
@@ -47,58 +58,24 @@ pub const DEFAULT_CUBE_NAME: &str = "default_cube";
 pub const DEFAULT_PLANE_NAME: &str = "default_plane";
 
 
-macro_rules! default_model_getters {
-    ($( ($name: expr, $fn_name: tt) ),*) => {
-        $(
-            #[allow(dead_code)]
-            pub fn $fn_name(&mut self) -> &mut Model {
-                self.borrow($name)
-            }
-        )*
-    };
-}
-
-
-impl EguiDrawable for ModelHandle {
-    fn on_egui(&mut self, ui: &mut egui::Ui, index: usize) -> bool {
-        enabled_header!(self, ui, "Model", index, {
-            ui.horizontal(|ui| {
-                ui.label(format!("Name: {}", self.name));
-
-                if ui.button("Load model").clicked() {
-                    let path = rfd::FileDialog::new().add_filter("Object model", &["obj"]).pick_file(); 
-                    if let Some(path) = path { 
-                        let t = path.to_str().unwrap_or(DEFAULT_CUBE_NAME).to_owned();
-                        self.name = t;
-                    }
-                }
-            });
-        });
-        false
-    }
-}
-
 pub struct ObjLoader {
-    models: HashMap<String, Model>,
-    default_cube: Model,
-    default_plane: Model
+    models: HashMap<String, Handle<Model>>,
+    model_meshes: HashMap<String, Vec<Rc<Mesh>>>
 }
 
 impl ObjLoader {
-    fn load_default_cube(shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Model {
+    fn load_default_cube(&mut self, shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) {
         let cube_path = "assets/obj/cube.obj";
 
-        let mut cube_model = Model::load_obj(cube_path, texture_loader, shader_loader).unwrap();
+        let cube_model = self.load_obj(DEFAULT_CUBE_NAME, cube_path, texture_loader, shader_loader).unwrap();
         let mat = Material::default_lit(texture_loader);
 
-        for mesh in &mut cube_model.meshes {
-            mesh.material = mat.clone();
+        for mr in &mut cube_model.borrow_mut().mesh_renderers {
+            mr.set_material(mat.clone());
         }
-
-        cube_model
     }
 
-    fn load_default_plane(_shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Model {
+    fn load_default_plane(&mut self, _shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) {
         
         //                   ^
         //  (-0.5, 0.5, 0)   |       (0.5, 0.5, 0)     
@@ -141,67 +118,225 @@ impl ObjLoader {
         
 
         let mat = Material::default_billboard(texture_loader);
-        let mesh = Mesh::new(vertices, indices, mat);
-
-        Model {
-            meshes: vec![mesh],
-            directory: "".to_string(),
-        }
+        let t = self.add_mesh(DEFAULT_PLANE_NAME.into(), Mesh::new(vertices, indices));
+        self.add_model(
+            DEFAULT_PLANE_NAME, 
+            Model::new(
+                DEFAULT_PLANE_NAME, 
+                "",
+                vec![
+                    MeshRenderer::new(
+                        t, 
+                        mat
+                    )
+                ]
+            )
+        );
     }
 
     pub fn new(shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Self {
-        ObjLoader { 
-            models: HashMap::new(),
-            default_cube: Self::load_default_cube(shader_loader, texture_loader),
-            default_plane: Self::load_default_plane(shader_loader, texture_loader)
-        }
+        let mut loader = ObjLoader {models: map! {}, model_meshes: map! {}};
+
+        loader.load_default_cube(shader_loader, texture_loader);
+        loader.load_default_plane(shader_loader, texture_loader);
+
+        loader
     }
 
-    pub fn load(&mut self, path: impl Into<String>, texture_loader: &mut TextureLoader, shader_loader: &mut ShaderLoader) -> ModelLoadResult<()> {
-        let path_string: String = path.into();
+    pub fn add_mesh(&mut self, model_key: String, mesh: Mesh) -> Rc<Mesh> {
+        self
+            .model_meshes
+            .entry(model_key.clone())
+            .or_insert(vec![])
+            .push(Rc::new(mesh));
 
-        if [DEFAULT_CUBE_NAME, DEFAULT_PLANE_NAME].contains(&path_string.as_str()) {
-            return Ok(());
-        }
+        let r = self.model_meshes.get(&model_key).unwrap().last().unwrap();
+        Rc::clone(r)
+    }
+
+    fn add_model(&mut self, model_key: impl Into<String>, model: Model) -> Handle<Model> {
+        let model_key = model_key.into();
+        self.models.insert(model_key.clone(), Handle::new(model));
+        Handle::clone(self.models.get(&model_key).unwrap())
+    }
+
+    pub fn load_model(
+        &mut self,
+        name: impl Into<String>,
+        path: impl Into<String>,
+        texture_loader: &mut TextureLoader,
+        shader_loader: &mut ShaderLoader
+    ) -> ModelLoadResult<Handle<Model>> {
+        let path_string: String = path.into();
+        let name: String = name.into();
 
         if !self.models.contains_key(&path_string) {
-            self.models.insert(path_string.clone(), Model::load(&path_string, texture_loader, shader_loader)?);
+            self.load_obj(name.clone(), &path_string, texture_loader, shader_loader)?;
         }
 
-        self.models.get_mut(&path_string).unwrap(); // Should always succeed
-        Ok(())
+        let t = self.models.get(&name).unwrap();
+        Ok(Handle::clone(t)) // Should always succeed
     }
 
-    pub fn borrow(&mut self, model_path: &str) -> &mut Model {
-
-        if model_path == DEFAULT_CUBE_NAME {
-            return &mut self.default_cube
-        } else if model_path == DEFAULT_PLANE_NAME {
-            return &mut self.default_plane
-        }
-
-        self
+    pub fn clone_handle(&mut self, model_key: &str) -> Handle<Model> {
+        Handle::clone(
+            self
             .models
-            .get_mut(model_path)
-            .unwrap_or(&mut self.default_cube)
+            .get(model_key)
+            .unwrap()
+        )
     }
     
-    pub fn clone(&mut self, old_name: &str, new_name: &str) -> &mut Model {
+    pub fn clone(&mut self, old_name: &str, new_name: &str) -> Handle<Model> {
         assert!(new_name != old_name, "New and old model names must be different!");
 
-        let new_model = self.borrow(old_name).clone();
-        self.models.insert(new_name.to_string(), new_model);
+        // Check if old model exists
+        //  if so: 
+        //      clone it
+        //  else:
+        //      clone the default cube
+        //
+        //   add the clone under the new name
+        //   return the clone's reference
 
-        self.borrow(new_name)
+        let clone_name = if self.models.contains_key(old_name.into()) {
+            old_name
+        } else {
+            DEFAULT_CUBE_NAME
+        };
+
+        let old_rc = self.models.get(clone_name).unwrap();
+
+        let mut model_clone: Model = (*old_rc).borrow().clone();
+        model_clone.name = new_name.into();
+        
+        self.add_model(new_name, model_clone)
     }
 
-    pub fn models(&mut self) -> &mut HashMap<String, Model> {
+    pub fn models(&mut self) -> &mut HashMap<String, Handle<Model>> {
         &mut self.models
     }
 
-    default_model_getters![
-        (DEFAULT_CUBE_NAME, default_cube_model),
-        (DEFAULT_PLANE_NAME, default_plane_model)
-    ];
+
+    // default_model_getters![
+    //     (DEFAULT_CUBE_NAME, default_cube_model),
+    //     (DEFAULT_PLANE_NAME, default_plane_model)
+    // ];
 }
 
+impl ObjLoader {
+    pub fn load_obj(
+        &mut self,
+        name: impl Into<String>,
+        path: impl Into<String>,
+        texture_loader: &mut TextureLoader,
+        _shader_loader: &mut ShaderLoader,
+    ) -> Result<Handle<Model>, ObjLoadError> {
+        
+        let mut objects = Obj::load(path.into())?;
+
+        // Must run this for materials to properly load
+        objects.load_mtls().unwrap();
+
+        let dir = objects.path;
+        let name: String = name.into();
+
+        let all_pos = objects.data.position;
+        let all_norm = objects.data.normal;
+        let all_tex = objects.data.texture;
+
+        let mut model = { 
+            let dir = String::from(dir.to_str().unwrap());
+            Model::new(dir.clone(), dir.clone(), Vec::new())
+        };
+        let num_objects = objects.data.objects.len() as f32;
+
+        for (object_index, object) in objects.data.objects.iter().enumerate()  {
+            println!("Loading object {i}/{num_objects}", i = object_index);
+
+            let obj_group = &object.groups[0];
+
+            let mut pnt: Vec<f32> = vec![];
+            let mut inds: Vec<u32> = vec![];
+            let mut index = 0u32;
+
+            let mut textures: Vec<Texture2D> = vec![];
+            let mut num_diffuse = 1;
+            let mut num_specular = 1;
+            let _num_emissive = 1;
+
+            for (_, poly) in obj_group.polys.iter().enumerate() {
+                for vertex in &poly.0 {
+                    let pos_index = vertex.0;
+
+                    pnt.extend(all_pos[pos_index]);
+
+                    if let Some(norm_index) = vertex.2 {
+                        pnt.extend(all_norm[norm_index]);
+                    }
+
+                    if let Some(tex_index) = vertex.1 {
+                        pnt.extend(all_tex[tex_index]);
+                    }
+                }
+
+                inds.extend(vec![index, (index + 1), (index + 2)]);
+                index += 3;
+
+                if let Some(obj_mat) = &obj_group.material {
+                    match obj_mat {
+                        obj::ObjMaterial::Ref(_) => todo!(),
+                        obj::ObjMaterial::Mtl(material) => {
+                            if let Some(diffuse_map) = &material.map_kd {
+                                let tex_handle = texture_loader
+                                    .load_texture(&dir.join(diffuse_map));
+
+                                let texture =
+                                    Texture2D::from_native_handle(
+                                        tex_handle, 
+                                        TextureType::Diffuse,
+                                        num_diffuse
+                                    );
+
+                                if !textures.contains(&texture) {
+                                    textures.push(texture);
+                                    num_diffuse += 1;
+                                }
+                            }
+
+                            if let Some(spec_map) = &material.map_ks {
+                                let tex_handle = texture_loader
+                                    .load_texture(&dir.join(spec_map));
+
+                                let texture =
+                                    Texture2D::from_native_handle(
+                                        tex_handle, 
+                                        TextureType::Specular,
+                                        num_specular
+                                    );
+
+                                if !textures.contains(&texture) {
+                                    textures.push(texture);
+                                    num_specular += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            let mat = Material {
+                shader_ref: DEFAULT_LIT_SHADER,
+                material_type: MaterialType::Lit,
+                textures,
+                transparent: false
+            };
+
+            
+            let mesh = self.add_mesh(name.clone(), Mesh::new(pnt, inds));
+            model.add_mesh(MeshRenderer::new(mesh, mat));
+        }
+
+        Ok(self.add_model(name.clone(), model))
+    }
+}

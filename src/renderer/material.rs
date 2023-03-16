@@ -5,14 +5,14 @@ use crate::{
 };
 
 #[allow(dead_code)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Hash, Copy, Clone, PartialEq, Eq)]
 pub enum MaterialType {
     Unlit,
     Lit,
     Billboard
 }
 
-#[derive(Clone, Eq)]
+#[derive(Hash, Clone, Eq)]
 pub struct Material {
     pub shader_ref: &'static str,
     pub material_type: MaterialType,
@@ -21,6 +21,19 @@ pub struct Material {
 }
 
 impl Material {
+    pub fn billboard(tex: Texture2D) -> Self {
+        Material {
+            shader_ref   : DEFAULT_BILLBOARD_SHADER,
+            material_type: MaterialType::Billboard,
+            textures     : vec![tex],
+            transparent  : true
+        }
+    }
+
+    pub fn set_textures(&mut self, new_tex: Vec<Texture2D>) {
+        self.textures = new_tex;
+    }
+
     pub fn default_billboard(texture_loader: &mut TextureLoader) -> Self {
         let directional_light = texture_loader.directional_light_texture();
         let diffuse_texture = Texture2D::from_native_handle(
@@ -29,12 +42,7 @@ impl Material {
             1
         );
 
-        Material {
-            shader_ref   : DEFAULT_BILLBOARD_SHADER,
-            material_type: MaterialType::Billboard,
-            textures     : vec![diffuse_texture],
-            transparent  : true
-        }
+        Self::billboard(diffuse_texture)
     }
 
     pub fn default_unlit(_shader_loader: &mut ShaderLoader) -> Self {

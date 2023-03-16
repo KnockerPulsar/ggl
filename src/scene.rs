@@ -1,5 +1,7 @@
 extern crate nalgebra_glm as glm;
 
+use std::rc::Rc;
+
 use egui_gizmo::GizmoMode;
 use glm::{vec3, vec2, Vec3};
 use glutin::dpi::PhysicalSize;
@@ -9,7 +11,7 @@ use crate::{
     ecs::Ecs,
     transform::{Transform, Degree3},
     light::*,
-    loaders::*, renderer::{Material, MaterialType}, texture::{Texture2D, TextureType},
+    loaders::{*, utils::Handle}, renderer::{Material, MaterialType}, texture::{Texture2D, TextureType}, model::Model,
 };
 
 pub struct Scene {
@@ -39,21 +41,6 @@ impl Scene {
     ) -> Self {
 
         let mut ecs = Ecs::new();
-        let positions = [
-            vec3(5., 0., 5.),
-            vec3(-5., 0., -5.),
-            vec3(5., 0., -5.),
-            vec3(-5., 0., 5.),
-        ];
-
-        let cube_data: Vec<Transform> = positions
-            .iter()
-            .enumerate()
-            .map(|(index, pos)| {
-                Transform::new(*pos, Degree3::default(), &format!("cube {}", index))
-            })
-            .collect();
-
         let up_two = vec3(0., 2., 0.);
 
         // let _spot0 = ecs
@@ -85,24 +72,19 @@ impl Scene {
         //     });
         //
         
-        let point_billboard_handle: ModelHandle = "point_billboard".into();
-        let _point_model = object_loader.clone(DEFAULT_PLANE_NAME, point_billboard_handle.name());
+        let pl_tex = Texture2D::from_native_handle(texture_loader.point_light_texture(), TextureType::Diffuse, 1);
+        let pl_mat = Material::billboard(pl_tex);
+        let pl_name = "Point light billboard";
+        let mut pl_model = object_loader.clone(DEFAULT_PLANE_NAME, pl_name);
 
-        let mut point_mat = Material::default_billboard(texture_loader);
-        point_mat.textures[0] = Texture2D::from_native_handle(
-            texture_loader.point_light_texture(),
-            TextureType::Diffuse,
-            1
-        );
-
-        for mesh in &mut object_loader.borrow(point_billboard_handle.name()).meshes {
-           mesh.material = point_mat.clone(); 
+        for mr in &mut pl_model.borrow_mut().mesh_renderers {
+           mr.set_material(pl_mat.clone());
         }
         
         let _point0 = ecs
             .add_entity()
             .with(Transform::with_scale(
-                    positions[0] + up_two,
+                    vec3(5.0, 5.0, 0.0),
                     Degree3::default(),
                     vec3(0.1, 0.1, 0.1),
                     "Point light 0",
@@ -112,7 +94,8 @@ impl Scene {
                 colors:  LightColors::no_ambient(vec3(2., 0., 0.), 0.1),
                 attenuation_constants: vec3(0.2, 0.0, 0.5),
             })
-        .with::<ModelHandle>(point_billboard_handle);
+        .with(pl_model);
+
         //
         // let _point1 = ecs
         //     .add_entity()
@@ -127,28 +110,39 @@ impl Scene {
         //         attenuation_constants: vec3(0.1, 0.0, 1.0),
         //     });
         
-        let lit_cube = "lit_cube";
-        let _ground_lit = object_loader.clone(DEFAULT_CUBE_NAME, lit_cube);
-
-        let _ground = ecs
-            .add_entity()
-            .with(
-                Transform::with_scale(
-                    vec3(0., -2., 0.),
-                    Degree3::xyz(0., 0., 0.), 
-                    vec3(10., 1., 10.), 
-                    "ground"
-                )
-            ).with::<ModelHandle>(lit_cube.into());
-
-
-        for cube_transform in cube_data {
-            let _model = ecs
+        {
+            let default_cube = object_loader.clone_handle(DEFAULT_CUBE_NAME);
+            let _ground = ecs
                 .add_entity()
-                .with(cube_transform)
-                .with::<ModelHandle>(DEFAULT_CUBE_NAME.into());
+                .with(
+                    Transform::with_scale(
+                        vec3(0., -2., 0.),
+                        Degree3::xyz(0., 0., 0.), 
+                        vec3(10., 1., 10.), 
+                        "ground"
+                    )
+                ).with(Handle::clone(&default_cube));
+
+
+            let positions = [
+                vec3(5., 0., 5.),
+                vec3(-5., 0., -5.),
+                vec3(5., 0., -5.),
+                vec3(-5., 0., 5.),
+            ];
+
+            positions
+                .iter()
+                .enumerate()
+                .for_each(|(index, pos)| {
+                    let transform = Transform::new(*pos, Degree3::default(), &format!("cube {}", index));
+                    let _model = ecs
+                        .add_entity()
+                        .with(transform)
+                        .with(Handle::clone(&default_cube));
+                    });
         }
-        
+
         let cam = Camera::new(
             glm::vec3(0.0, 1.0, 5.0f32),
             glm::vec3(0.0, 1.0, 0.0f32),
@@ -156,28 +150,30 @@ impl Scene {
             window_width as f32 / window_height as f32
         );
 
-        let _directional = ecs
-            .add_entity()
-            .with(Transform::with_scale(
-                    vec3(0.0, 0.0, 0.0),
-                    Degree3(vec3(0., 0., 0.)),
-                    vec3(0.1, 0.1, 0.1),
-                    "Directional Light",
-            ))
-            .with(DirectionalLight {
-                enabled: true,
-                colors: LightColors::default().ambient(vec3(0.1, 0.04, 0.1)).diffuse(vec3(0.5, 0.2, 0.5)),
-            })
-        .with::<ModelHandle>(DEFAULT_PLANE_NAME.into());
+        {
+            let default_plane = object_loader.clone_handle(DEFAULT_PLANE_NAME);
+            let _directional = ecs
+                .add_entity()
+                .with(Transform::with_scale(
+                        vec3(0.0, 0.0, 0.0),
+                        Degree3(vec3(0., 0., 0.)),
+                        vec3(0.1, 0.1, 0.1),
+                        "Directional Light",
+                ))
+                .with(DirectionalLight {
+                    enabled: true,
+                    colors: LightColors::default().ambient(vec3(0.1, 0.04, 0.1)).diffuse(vec3(0.5, 0.2, 0.5)),
+                })
+            .with::<Handle<Model>>(Handle::clone(&default_plane));
+        }
         
-        let bp_handle = "assets/obj/backpack.obj";
-        let _ = object_loader.load(bp_handle, texture_loader, shader_loader);
-        let bp = object_loader.borrow(bp_handle);
-
-        let _backpack = ecs
-            .add_entity()
-            .with(Transform::default().set_name("Backpack").clone())
-            .with::<ModelHandle>(bp_handle.into());
+        // let bp_path = "assets/obj/backpack.obj";
+        // let bp = object_loader.load_model("Backpack", bp_path, texture_loader, shader_loader).unwrap();
+        //
+        // let _backpack = ecs
+        //     .add_entity()
+        //     .with(Transform::default().set_name("Backpack").clone())
+        //     .with::<Handle<Model>>(Handle::clone(&bp));
 
         Scene {
             selected_entity: None,
