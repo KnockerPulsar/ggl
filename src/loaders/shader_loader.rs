@@ -1,20 +1,33 @@
+use crate::{
+    map,
+    shader::{ProgramHandle, UniformMap},
+};
 use std::{collections::HashMap, rc::Rc};
-use crate::{shader::{ShaderProgram, UniformMap}, map};
 
-
-
-pub const DEFAULT_UNLIT_SHADER:     &str = "default_unlit";
+pub const DEFAULT_UNLIT_SHADER: &str = "default_unlit";
 pub const DEFAULT_BILLBOARD_SHADER: &str = "default_billboard";
-pub const DEFAULT_LIT_SHADER:       &str = "default_lit";
+pub const DEFAULT_LIT_SHADER: &str = "default_lit";
 
 const DEFAULT_SHADERS: [(&str, &str, &str); 3] = [
-    (DEFAULT_UNLIT_SHADER    , "assets/shaders/default_unlit.vert",  "assets/shaders/default_unlit.frag"),
-    (DEFAULT_BILLBOARD_SHADER, "assets/shaders/billboard_textured.vert", "assets/shaders/simple.frag"),
-    (DEFAULT_LIT_SHADER      , "assets/shaders/textured.vert", "assets/shaders/lit-textured.frag"),
+    (
+        DEFAULT_UNLIT_SHADER,
+        "assets/shaders/default_unlit.vert",
+        "assets/shaders/default_unlit.frag",
+    ),
+    (
+        DEFAULT_BILLBOARD_SHADER,
+        "assets/shaders/billboard_textured.vert",
+        "assets/shaders/simple.frag",
+    ),
+    (
+        DEFAULT_LIT_SHADER,
+        "assets/shaders/textured.vert",
+        "assets/shaders/lit-textured.frag",
+    ),
 ];
 
 pub struct ShaderLoader {
-    shaders: HashMap<String, Rc<ShaderProgram>>,
+    shaders: HashMap<String, ProgramHandle>,
 }
 
 impl ShaderLoader {
@@ -28,7 +41,7 @@ impl ShaderLoader {
         }
 
         for (program_name, vert_path, frag_path) in DEFAULT_SHADERS {
-            shader_loader.load_shader(program_name, vert_path, frag_path, map!{});
+            shader_loader.load_shader(program_name, vert_path, frag_path, map! {});
         }
 
         shader_loader
@@ -39,24 +52,28 @@ impl ShaderLoader {
         program_name: &str,
         vert_path: &str,
         frag_path: &str,
-        uniforms: UniformMap
+        uniforms: UniformMap,
     ) {
         if !self.shaders.contains_key(program_name) {
             println!("Loading shader ({program_name})");
 
-            let shader = ShaderProgram::new(vert_path, frag_path, uniforms);
+            let shader = ProgramHandle::new(vert_path, frag_path, uniforms);
             match shader {
-                Ok(shader) => { self.shaders.insert(String::from(program_name), Rc::new(shader)); } ,
+                Ok(shader) => {
+                    self.shaders.insert(String::from(program_name), shader);
+                }
                 Err(err) => eprintln!("Failed to load shader: {}", err),
             };
         }
     }
 
-    pub fn get_shader_rc(&mut self, program_name: &str) -> Rc<ShaderProgram> {
-        if self.shaders.contains_key(program_name) {
-            Rc::clone(self.shaders.get_mut(program_name).unwrap())
+    pub fn get_shader_rc(&mut self, program_name: &str) -> ProgramHandle {
+        let shader = if self.shaders.contains_key(program_name) {
+            self.shaders.get_mut(program_name)
         } else {
-            Rc::clone(self.shaders.get_mut(DEFAULT_UNLIT_SHADER).unwrap())
-        }
+            self.shaders.get_mut(DEFAULT_UNLIT_SHADER)
+        };
+
+        shader.unwrap().clone()
     }
 }

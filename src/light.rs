@@ -4,12 +4,11 @@ extern crate nalgebra_glm as glm;
 use std::format;
 
 use crate::egui_drawable::EguiDrawable;
-use crate::shader::ShaderProgram;
+use crate::shader::ProgramHandle;
 use crate::Transform;
 
 use egui::Ui;
 use nalgebra_glm::*;
-
 
 macro_rules! shared_light_fn {
     () => {
@@ -37,14 +36,13 @@ macro_rules! enabled_header {
                     });
                 });
             })
-        .body( |$ui| {
-            if $self.enabled {
-                $body
-            }
-        });
+            .body(|$ui| {
+                if $self.enabled {
+                    $body
+                }
+            });
     };
 }
-
 
 pub trait Light {
     fn upload_data(
@@ -54,8 +52,8 @@ pub trait Light {
         //* String containing uniform name into light array
         //* Example: u_point_lights[0]
         uniform_name: &str,
-        shader: &ShaderProgram,
-        global_enable: &bool
+        shader: &ProgramHandle,
+        global_enable: &bool,
     );
 
     fn is_enabled(&self) -> bool;
@@ -71,19 +69,22 @@ pub struct LightColors {
 
 impl LightColors {
     pub fn from_specular(spec: Vec3, dimming_factor: f32) -> Self {
-        assert!(dimming_factor < 1.0, "Dimming factor > 1.0! ({dimming_factor})");
-        LightColors { 
-            ambient: spec * dimming_factor * dimming_factor, 
-            diffuse: spec * dimming_factor, 
-            specular: spec 
+        assert!(
+            dimming_factor < 1.0,
+            "Dimming factor > 1.0! ({dimming_factor})"
+        );
+        LightColors {
+            ambient: spec * dimming_factor * dimming_factor,
+            diffuse: spec * dimming_factor,
+            specular: spec,
         }
     }
 
     pub fn no_ambient(spec: Vec3, dimming_factor: f32) -> Self {
-        LightColors { 
+        LightColors {
             ambient: Vec3::zeros(),
-            diffuse: spec * dimming_factor, 
-            specular: spec 
+            diffuse: spec * dimming_factor,
+            specular: spec,
         }
     }
 
@@ -137,29 +138,23 @@ impl Light for DirectionalLight {
         transform: &Transform,
 
         uniform_name: &str,
-        shader: &ShaderProgram,
-        global_enable: &bool
+        shader: &ProgramHandle,
+        global_enable: &bool,
     ) {
         let direction = (transform.get_model_matrix() * glm::vec4(0.0, -1.0, 0.0, 0.0f32)).xyz();
 
         shader
             .set_vec3(&format!("{}.direction", uniform_name), direction)
-            .set_vec3(
-                &format!("{}.ambient", uniform_name),
-                self.colors.ambient,
-            )
-            .set_vec3(
-                &format!("{}.diffuse", uniform_name),
-                self.colors.diffuse,
-            )
-            .set_vec3(
-                &format!("{}.specular", uniform_name),
-                self.colors.specular,
-            )
-            .set_bool(&format!("{uniform_name}.is_enabled"), *global_enable && self.is_enabled());
+            .set_vec3(&format!("{}.ambient", uniform_name), self.colors.ambient)
+            .set_vec3(&format!("{}.diffuse", uniform_name), self.colors.diffuse)
+            .set_vec3(&format!("{}.specular", uniform_name), self.colors.specular)
+            .set_bool(
+                &format!("{uniform_name}.is_enabled"),
+                *global_enable && self.is_enabled(),
+            );
     }
 
-    shared_light_fn!{}
+    shared_light_fn! {}
 }
 
 impl Light for PointLight {
@@ -167,33 +162,27 @@ impl Light for PointLight {
         &self,
         transform: &Transform,
         uniform_name: &str,
-        shader: &ShaderProgram,
-        global_enable: &bool
+        shader: &ProgramHandle,
+        global_enable: &bool,
     ) {
         let position = (transform.get_model_matrix() * glm::vec4(0.0, 0.0, 0.0, 1.0)).xyz();
 
         shader
             .set_vec3(&format!("{}.position", uniform_name), position)
-            .set_vec3(
-                &format!("{}.ambient", uniform_name),
-                self.colors.ambient,
-            )
-            .set_vec3(
-                &format!("{}.diffuse", uniform_name),
-                self.colors.diffuse,
-            )
-            .set_vec3(
-                &format!("{}.specular", uniform_name),
-                self.colors.specular,
-            )
+            .set_vec3(&format!("{}.ambient", uniform_name), self.colors.ambient)
+            .set_vec3(&format!("{}.diffuse", uniform_name), self.colors.diffuse)
+            .set_vec3(&format!("{}.specular", uniform_name), self.colors.specular)
             .set_vec3(
                 &format!("{}.attenuation_constants", uniform_name),
                 self.attenuation_constants,
             )
-            .set_bool(&format!("{uniform_name}.is_enabled"), *global_enable && self.is_enabled());
+            .set_bool(
+                &format!("{uniform_name}.is_enabled"),
+                *global_enable && self.is_enabled(),
+            );
     }
 
-    shared_light_fn!{}
+    shared_light_fn! {}
 }
 
 impl Light for SpotLight {
@@ -202,8 +191,8 @@ impl Light for SpotLight {
         transform: &Transform,
 
         uniform_name: &str,
-        shader: &ShaderProgram,
-        global_enable: &bool
+        shader: &ProgramHandle,
+        global_enable: &bool,
     ) {
         let direction = (transform.get_model_matrix() * glm::vec4(0.0, -1.0, 0.0, 0.0f32)).xyz();
         let position = (transform.get_model_matrix() * glm::vec4(0.0, 0.0, 0.0, 1.0)).xyz();
@@ -211,18 +200,9 @@ impl Light for SpotLight {
         shader
             .set_vec3(&format!("{}.position", uniform_name), position)
             .set_vec3(&format!("{}.direction", uniform_name), direction)
-            .set_vec3(
-                &format!("{}.ambient", uniform_name),
-                self.colors.ambient,
-            )
-            .set_vec3(
-                &format!("{}.diffuse", uniform_name),
-                self.colors.diffuse,
-            )
-            .set_vec3(
-                &format!("{}.specular", uniform_name),
-                self.colors.specular,
-            )
+            .set_vec3(&format!("{}.ambient", uniform_name), self.colors.ambient)
+            .set_vec3(&format!("{}.diffuse", uniform_name), self.colors.diffuse)
+            .set_vec3(&format!("{}.specular", uniform_name), self.colors.specular)
             .set_vec3(
                 &format!("{}.attenuation_constants", uniform_name),
                 self.attenuation_constants,
@@ -231,10 +211,13 @@ impl Light for SpotLight {
                 &format!("{}.cutoff_cos", uniform_name),
                 glm::cos(&glm::radians(&self.cutoff_angles)),
             )
-            .set_bool(&format!("{uniform_name}.is_enabled"), *global_enable && self.is_enabled());
+            .set_bool(
+                &format!("{uniform_name}.is_enabled"),
+                *global_enable && self.is_enabled(),
+            );
     }
 
-    shared_light_fn!{}
+    shared_light_fn! {}
 }
 
 impl EguiDrawable for LightColors {
@@ -260,10 +243,12 @@ impl EguiDrawable for LightColors {
 }
 
 pub fn float3_slider(float3: &mut Vec3, ui: &mut Ui) -> bool {
-
     use egui::Color32;
-    let colors = [Color32::LIGHT_RED, Color32::LIGHT_GREEN, Color32::LIGHT_BLUE];
-
+    let colors = [
+        Color32::LIGHT_RED,
+        Color32::LIGHT_GREEN,
+        Color32::LIGHT_BLUE,
+    ];
 
     macro_rules! stroke_color {
         ($ui: ident, $color: expr) => {
@@ -272,10 +257,14 @@ pub fn float3_slider(float3: &mut Vec3, ui: &mut Ui) -> bool {
     }
 
     let any_changed = ui.horizontal(|ui| {
-        let changed = float3.iter_mut().zip(colors).map(|(float, color)| {
-            stroke_color!(ui, color);
-            ui.add(egui::DragValue::new(float).speed(0.01)).changed()
-        }).collect::<Vec<bool>>();
+        let changed = float3
+            .iter_mut()
+            .zip(colors)
+            .map(|(float, color)| {
+                stroke_color!(ui, color);
+                ui.add(egui::DragValue::new(float).speed(0.01)).changed()
+            })
+            .collect::<Vec<bool>>();
 
         changed.iter().any(|b| *b)
     });
@@ -295,14 +284,14 @@ impl EguiDrawable for Vec2 {
         let mut fields_changed = false;
 
         ui.horizontal(|ui| {
-
             ui.scope(|ui| {
                 ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_RED;
                 fields_changed |= ui
                     .add(egui::DragValue::new(&mut self.x).speed(0.01))
                     .changed();
 
-                ui.style_mut().visuals.widgets.inactive.fg_stroke.color = egui::Color32::LIGHT_GREEN;
+                ui.style_mut().visuals.widgets.inactive.fg_stroke.color =
+                    egui::Color32::LIGHT_GREEN;
                 fields_changed |= ui
                     .add(egui::DragValue::new(&mut self.y).speed(0.01))
                     .changed();
@@ -314,7 +303,6 @@ impl EguiDrawable for Vec2 {
 
 impl EguiDrawable for SpotLight {
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-
         enabled_header!(self, ui, "Spot light", index, {
             ui.add(egui::Label::new("Cuttoff angles"));
             self.cutoff_angles.on_egui(ui, index);
@@ -324,24 +312,23 @@ impl EguiDrawable for SpotLight {
 
             self.colors.on_egui(ui, index);
         });
-        
+
         false
     }
 }
 
 impl Default for PointLight {
     fn default() -> Self {
-        PointLight { 
-            enabled: true, 
-            colors: LightColors::no_ambient(vec3(1., 1., 1.), 0.1), 
-            attenuation_constants: vec3(1., 1., 1.) 
+        PointLight {
+            enabled: true,
+            colors: LightColors::no_ambient(vec3(1., 1., 1.), 0.1),
+            attenuation_constants: vec3(1., 1., 1.),
         }
     }
 }
 
 impl EguiDrawable for PointLight {
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-
         enabled_header!(self, ui, "Point light", index, {
             ui.add(egui::Label::new("Attenuation constants"));
             self.attenuation_constants.on_egui(ui, index);
