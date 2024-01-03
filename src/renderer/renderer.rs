@@ -1,31 +1,27 @@
-use std::{
-    sync::Arc,
-    collections::HashMap,
-    mem::size_of
-};
+use std::{collections::HashMap, mem::size_of, sync::Arc};
 
 use glow::HasContext;
 use glutin::dpi::PhysicalSize;
 use image::EncodableLayout;
-use nalgebra_glm::{Vec3, vec3};
+use nalgebra_glm::{vec3, Vec3};
 
 use crate::{
-    gl::{set_gl, get_gl},
     app::EventLoop,
     camera::Camera,
-    loaders::{*, utils::Handle},
     ecs::Ecs,
+    gl::{get_gl, set_gl},
     light_system,
+    loaders::{utils::Handle, *},
+    map,
+    mesh::MeshRenderer,
+    model::Model,
+    shader::Uniform,
     transform::Transform,
-    model::Model, 
-    shader::Uniform, 
-    map, mesh::{MeshRenderer}
 };
 
 use super::material::*;
 
 pub type GlutinWindow = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
-
 
 struct Line {
     // start_x, start_y, start_z, end_x, end_y, end_z
@@ -33,7 +29,7 @@ struct Line {
     material: Material,
 
     vao: glow::VertexArray,
-    vbo: glow::Buffer
+    vbo: glow::Buffer,
 }
 
 impl Line {
@@ -44,32 +40,24 @@ impl Line {
 
         unsafe {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbo));
-            gl.buffer_data_u8_slice(
-                glow::ARRAY_BUFFER,
-                self.ends.as_bytes(),
-                glow::STATIC_DRAW,
-            );
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, self.ends.as_bytes(), glow::STATIC_DRAW);
         }
     }
 
     fn set_ends(&mut self, start: Vec3, end: Vec3) {
-        self.ends = [
-            start.x, start.y, start.z,
-            end.x, end.y, end.z
-        ];
+        self.ends = [start.x, start.y, start.z, end.x, end.y, end.z];
     }
 
     pub fn draw(&mut self, start: Vec3, end: Vec3) {
         let gl = get_gl();
         self.set_ends(start, end);
-        unsafe { 
+        unsafe {
             gl.bind_vertex_array(Some(self.vao));
             self.upload_data();
 
             gl.line_width(0.1);
             gl.draw_arrays(glow::LINES, 0, 2);
         }
-
     }
 }
 
@@ -85,7 +73,12 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(window: GlutinWindow, window_width: usize, window_height: usize, shader_loader: &mut ShaderLoader) -> Self {
+    pub fn new(
+        window: GlutinWindow,
+        window_width: usize,
+        window_height: usize,
+        shader_loader: &mut ShaderLoader,
+    ) -> Self {
         let window_width = window_width as i32;
         let window_height = window_height as i32;
 
@@ -100,14 +93,15 @@ impl Renderer {
             lights_on: true,
 
             debug_line_vao: vao,
-            debug_line_vbo: vbo
-            // debug_line: Line::new(shader_loader)
+            debug_line_vbo: vbo, // debug_line: Line::new(shader_loader)
         }
     }
 
     pub fn window_resized(&self, physical_size: &PhysicalSize<u32>) {
         self.window.resize(*physical_size);
-        unsafe { get_gl().viewport(0, 0, self.window_width, self.window_height); }
+        unsafe {
+            get_gl().viewport(0, 0, self.window_width, self.window_height);
+        }
     }
 
     pub fn render(
@@ -115,7 +109,7 @@ impl Renderer {
         camera: &Camera,
         ecs: &mut Ecs,
         shader_loader: &mut ShaderLoader,
-        time: f32
+        time: f32,
     ) {
         unsafe {
             let gl = get_gl();
@@ -126,12 +120,13 @@ impl Renderer {
             gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         }
 
-        light_system(ecs, shader_loader, self, camera);
-          
+        light_system(ecs, shader_loader, self);
+
         let render_commands = Self::collect_render_commands(ecs);
 
-        let (transparent, opaque): 
-            (Vec<_>, Vec<_>) = render_commands.into_iter().partition(|rc| rc.1.is_transparent());
+        let (transparent, opaque): (Vec<_>, Vec<_>) = render_commands
+            .into_iter()
+            .partition(|rc| rc.1.is_transparent());
 
         opaque.iter().for_each(|opaque_rc| {
             let RenderCommand(t, mesh) = opaque_rc;
@@ -168,18 +163,22 @@ impl Renderer {
     }
 
     fn collect_render_commands(ecs: &mut Ecs) -> Vec<RenderCommand> {
-        let rcs: Vec<Option<Vec<_>>> = 
+        let rcs: Vec<Option<Vec<_>>> =
             ecs.do_all(|model_handle: &Handle<Model>, transform: &Transform| {
-            let model_handle = model_handle.borrow(); if !model_handle.enabled { return None; }
-            Some(
-                model_handle.mesh_renderers.iter()
-                .map(|mr| { RenderCommand(transform.clone(), mr.clone()) })
-                .collect::<Vec<_>>()
-            )
-        });
+                let model_handle = model_handle.borrow();
+                if !model_handle.enabled {
+                    return None;
+                }
+                Some(
+                    model_handle
+                        .mesh_renderers
+                        .iter()
+                        .map(|mr| RenderCommand(transform.clone(), mr.clone()))
+                        .collect::<Vec<_>>(),
+                )
+            });
 
-        rcs
-            .into_iter()
+        rcs.into_iter()
             .filter(|v| v.is_some())
             .map(|v| v.unwrap())
             .flatten()
@@ -201,32 +200,16 @@ impl Renderer {
     }
 
     pub fn draw_line(&mut self, start: Vec3, end: Vec3) {
-
         let gl = get_gl();
 
-
-        let ends = [
-            start.x, start.y, start.z,
-            end.x, end.y, end.z 
-        ];
+        let ends = [start.x, start.y, start.z, end.x, end.y, end.z];
 
         unsafe {
             gl.bind_vertex_array(Some(self.debug_line_vao));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.debug_line_vbo));
-            gl.buffer_data_u8_slice(
-                glow::ARRAY_BUFFER,
-                ends.as_bytes(),
-                glow::STATIC_DRAW,
-            );
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, ends.as_bytes(), glow::STATIC_DRAW);
 
-            gl.vertex_attrib_pointer_f32(
-                0,
-                3,
-                glow::FLOAT,
-                false,
-                3 * size_of::<f32>() as i32,
-                0
-            );
+            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 3 * size_of::<f32>() as i32, 0);
 
             gl.enable_vertex_attrib_array(0);
 
@@ -239,13 +222,11 @@ impl Renderer {
         // glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0); // Specify how the buffer is converted to vertices
         // glEnableVertexAttribArray(0); // Enable the vertex array}
     }
-
 }
 
 pub struct RenderCommand(Transform, MeshRenderer);
 
-
-// OpenGL 
+// OpenGL
 // TODO: Add outlining to objects.
 // TODO: Proper transparency
 

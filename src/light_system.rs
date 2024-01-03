@@ -1,21 +1,16 @@
 extern crate nalgebra_glm as glm;
 
-use glm::{vec3, Vec3};
-
+use crate::renderer::Renderer;
 use crate::{
-    camera::Camera,
     ecs::Ecs,
-    light::Light,
+    light::{CommonLightData, LightInterface},
     light::{DirectionalLight, PointLight, SpotLight},
-    loaders::{ShaderLoader, DEFAULT_LIT_SHADER, DEFAULT_UNLIT_SHADER},
-    map,
-    renderer::Renderer,
-    shader::{ProgramHandle, Uniform},
-    transform::{Degree3, Transform},
+    loaders::{ShaderLoader, DEFAULT_LIT_SHADER},
+    shader::ProgramHandle,
+    transform::Transform,
 };
-use std::collections::HashMap;
 
-pub fn light_subsystem<T: Light>(
+pub fn light_subsystem<T: LightInterface>(
     lit_shader: &ProgramHandle,
     ecs: &mut Ecs,
     u_light_array: &str,
@@ -24,68 +19,62 @@ pub fn light_subsystem<T: Light>(
     T: 'static,
 {
     let mut enabled_light_index = 0;
-    ecs.do_all_mut::<Transform, T, ()>(|transform, light| {
-        light.upload_data(
-            transform,
-            &format!("{}[{}]", u_light_array, enabled_light_index),
-            lit_shader,
-            global_enable,
-        );
-        enabled_light_index += 1;
-
-        None
-    });
+    ecs.query3::<Transform, PointLight, CommonLightData>()
+        .iter_mut()
+        .filter_map(|(x, y, z)| {
+            if let (Some(xx), Some(yy), Some(zz)) = (x, y, z) {
+                Some((xx, yy, zz))
+            } else {
+                None
+            }
+        })
+        .for_each(|(transform, light, cld)| {
+            light.upload_data(
+                &cld,
+                transform,
+                &format!("{}[{}]", u_light_array, enabled_light_index),
+                lit_shader,
+                global_enable,
+            );
+            enabled_light_index += 1;
+        });
 }
 
-pub fn light_system(
-    ecs: &mut Ecs,
-    shader_loader: &mut ShaderLoader,
-    r: &mut Renderer,
-    camera: &Camera,
-) {
+pub fn light_system(ecs: &mut Ecs, shader_loader: &mut ShaderLoader, r: &mut Renderer) {
     let lit_shader = &shader_loader.get_shader_rc(DEFAULT_LIT_SHADER);
     lit_shader.use_program();
 
     light_subsystem::<SpotLight>(lit_shader, ecs, "u_spot_lights", &r.lights_on);
-
     light_subsystem::<PointLight>(lit_shader, ecs, "u_point_lights", &r.lights_on);
-
-    ecs.do_one::<Transform, DirectionalLight, ()>(|transform, directional_light| {
-        directional_light.upload_data(
-            transform,
-            "u_directional_light",
-            lit_shader,
-            &(r.lights_on && directional_light.is_enabled()),
-        );
-
-        let rot = transform.get_rot().0;
-        let (theta, phi) = (rot.x.to_radians(), rot.y.to_radians());
-
-        // x = r * sin(theta) * cos(phi)
-        // y = r * cos(theta)
-        // z = r * sin(theta) * sin(phi)
-
-        // TODO: fix this
-        let dx = theta.sin() * phi.cos();
-        let dy = theta.cos();
-        let dz = theta.sin() * phi.sin();
-
-        let bul = shader_loader.get_shader_rc(DEFAULT_UNLIT_SHADER);
-        bul.use_program();
-
-        bul.upload_uniforms(
-            &map! {
-                "projection" => Uniform::Mat4(camera.get_proj_matrix()),
-                "view"       => Uniform::Mat4(camera.get_view_matrix()),
-                "model"      => Uniform::Mat4(transform.get_model_matrix())
-            },
-            "",
-        );
-
-        r.draw_line(
-            *transform.get_pos(),
-            transform.get_pos() + vec3(-dx, -dy, -dz) * 5.0,
-        );
-        None
-    });
+    light_subsystem::<DirectionalLight>(lit_shader, ecs, "u_directional_ligths", &r.lights_on);
 }
+
+// let rot = transform.get_rot().0;
+// let (theta, phi) = (rot.x.to_radians(), rot.y.to_radians());
+//
+// // x = r * sin(theta) * cos(phi)
+// // y = r * cos(theta)
+// // z = r * sin(theta) * sin(phi)
+//
+// // TODO: fix this
+// let dx = theta.sin() * phi.cos();
+// let dy = theta.cos();
+// let dz = theta.sin() * phi.sin();
+//
+// let bul = shader_loader.get_shader_rc(DEFAULT_UNLIT_SHADER);
+// bul.use_program();
+//
+// bul.upload_uniforms(
+//     &map! {
+//         "projection" => Uniform::Mat4(camera.get_proj_matrix()),
+//         "view"       => Uniform::Mat4(camera.get_view_matrix()),
+//         "model"      => Uniform::Mat4(transform.get_model_matrix())
+//     },
+//     "",
+// );
+//
+// r.draw_line(
+//     *transform.get_pos(),
+//     transform.get_pos() + vec3(-dx, -dy, -dz) * 5.0,
+// );
+// None

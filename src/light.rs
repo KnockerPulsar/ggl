@@ -10,18 +10,6 @@ use crate::Transform;
 use egui::Ui;
 use nalgebra_glm::*;
 
-macro_rules! shared_light_fn {
-    () => {
-        fn is_enabled(&self) -> bool {
-            self.enabled
-        }
-
-        fn set_enabled(&mut self, enabled: &bool) {
-            self.enabled = *enabled;
-        }
-    };
-}
-
 #[macro_export]
 macro_rules! enabled_header {
     ($self: ident, $ui: ident, $header_name: literal, $index: ident , $body: expr) => {
@@ -44,9 +32,10 @@ macro_rules! enabled_header {
     };
 }
 
-pub trait Light {
+pub trait LightInterface {
     fn upload_data(
         &self,
+        common_data: &CommonLightData,
         transform: &Transform,
 
         //* String containing uniform name into light array
@@ -55,9 +44,6 @@ pub trait Light {
         shader: &ProgramHandle,
         global_enable: &bool,
     );
-
-    fn is_enabled(&self) -> bool;
-    fn set_enabled(&mut self, enabled: &bool);
 }
 
 #[derive(Default, Clone)]
@@ -110,99 +96,104 @@ impl LightColors {
     }
 }
 
-#[derive(Default, Clone)]
-pub struct DirectionalLight {
+#[derive(Clone)]
+pub struct CommonLightData {
     pub enabled: bool,
     pub colors: LightColors,
 }
 
+#[derive(Default, Clone)]
+pub struct DirectionalLight {}
+
 #[derive(Clone)]
 pub struct PointLight {
-    pub enabled: bool,
-    pub colors: LightColors,
     pub attenuation_constants: Vec3,
+}
+
+impl Default for PointLight {
+    fn default() -> Self {
+        PointLight {
+            attenuation_constants: vec3(1., 1., 1.),
+        }
+    }
 }
 
 #[derive(Default, Clone)]
 pub struct SpotLight {
-    pub enabled: bool,
     pub cutoff_angles: Vec2, // Angles in degress, converted to cos(rad(angle)) on upload
-
-    pub colors: LightColors,
     pub attenuation_constants: Vec3,
 }
 
-impl Light for DirectionalLight {
-    fn upload_data(
-        &self,
-        transform: &Transform,
-
-        uniform_name: &str,
-        shader: &ProgramHandle,
-        global_enable: &bool,
-    ) {
-        let direction = (transform.get_model_matrix() * glm::vec4(0.0, -1.0, 0.0, 0.0f32)).xyz();
-
+impl CommonLightData {
+    fn upload_data(&self, uniform_name: &str, shader: &ProgramHandle, global_enable: &bool) {
         shader
-            .set_vec3(&format!("{}.direction", uniform_name), direction)
             .set_vec3(&format!("{}.ambient", uniform_name), self.colors.ambient)
             .set_vec3(&format!("{}.diffuse", uniform_name), self.colors.diffuse)
             .set_vec3(&format!("{}.specular", uniform_name), self.colors.specular)
             .set_bool(
                 &format!("{uniform_name}.is_enabled"),
-                *global_enable && self.is_enabled(),
+                *global_enable && self.enabled,
             );
     }
-
-    shared_light_fn! {}
 }
 
-impl Light for PointLight {
+impl LightInterface for DirectionalLight {
     fn upload_data(
         &self,
+        common_data: &CommonLightData,
         transform: &Transform,
+
         uniform_name: &str,
         shader: &ProgramHandle,
         global_enable: &bool,
     ) {
+        common_data.upload_data(uniform_name, shader, global_enable);
+
+        let direction = (transform.get_model_matrix() * glm::vec4(0.0, -1.0, 0.0, 0.0f32)).xyz();
+        shader.set_vec3(&format!("{}.direction", uniform_name), direction);
+    }
+}
+
+impl LightInterface for PointLight {
+    fn upload_data(
+        &self,
+        common_data: &CommonLightData,
+        transform: &Transform,
+
+        uniform_name: &str,
+        shader: &ProgramHandle,
+        global_enable: &bool,
+    ) {
+        common_data.upload_data(uniform_name, shader, global_enable);
         let position = (transform.get_model_matrix() * glm::vec4(0.0, 0.0, 0.0, 1.0)).xyz();
 
         shader
             .set_vec3(&format!("{}.position", uniform_name), position)
-            .set_vec3(&format!("{}.ambient", uniform_name), self.colors.ambient)
-            .set_vec3(&format!("{}.diffuse", uniform_name), self.colors.diffuse)
-            .set_vec3(&format!("{}.specular", uniform_name), self.colors.specular)
             .set_vec3(
                 &format!("{}.attenuation_constants", uniform_name),
                 self.attenuation_constants,
-            )
-            .set_bool(
-                &format!("{uniform_name}.is_enabled"),
-                *global_enable && self.is_enabled(),
             );
     }
-
-    shared_light_fn! {}
 }
 
-impl Light for SpotLight {
+impl LightInterface for SpotLight {
     fn upload_data(
         &self,
+        common_data: &CommonLightData,
         transform: &Transform,
 
         uniform_name: &str,
         shader: &ProgramHandle,
         global_enable: &bool,
     ) {
+        common_data.upload_data(uniform_name, shader, global_enable);
+
         let direction = (transform.get_model_matrix() * glm::vec4(0.0, -1.0, 0.0, 0.0f32)).xyz();
         let position = (transform.get_model_matrix() * glm::vec4(0.0, 0.0, 0.0, 1.0)).xyz();
 
         shader
             .set_vec3(&format!("{}.position", uniform_name), position)
             .set_vec3(&format!("{}.direction", uniform_name), direction)
-            .set_vec3(&format!("{}.ambient", uniform_name), self.colors.ambient)
-            .set_vec3(&format!("{}.diffuse", uniform_name), self.colors.diffuse)
-            .set_vec3(&format!("{}.specular", uniform_name), self.colors.specular)
             .set_vec3(
                 &format!("{}.attenuation_constants", uniform_name),
                 self.attenuation_constants,
@@ -210,14 +201,8 @@ impl Light for SpotLight {
             .set_vec2(
                 &format!("{}.cutoff_cos", uniform_name),
                 glm::cos(&glm::radians(&self.cutoff_angles)),
-            )
-            .set_bool(
-                &format!("{uniform_name}.is_enabled"),
-                *global_enable && self.is_enabled(),
             );
     }
-
-    shared_light_fn! {}
 }
 
 impl EguiDrawable for LightColors {
@@ -300,41 +285,36 @@ impl EguiDrawable for Vec2 {
         fields_changed
     }
 }
+impl EguiDrawable for CommonLightData {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
+        false
+    }
+}
 
+// TODO: How can we pass the common light data to here?
+// Easiest solution: pass the whole ecs instance here (might not be possible?)
 impl EguiDrawable for SpotLight {
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-        enabled_header!(self, ui, "Spot light", index, {
-            ui.add(egui::Label::new("Cuttoff angles"));
-            self.cutoff_angles.on_egui(ui, index);
-
-            ui.add(egui::Label::new("Attenuation constants"));
-            self.attenuation_constants.on_egui(ui, index);
-
-            self.colors.on_egui(ui, index);
-        });
+        // enabled_header!(self, ui, "Spot light", index, {
+        //     ui.add(egui::Label::new("Cuttoff angles"));
+        //     self.cutoff_angles.on_egui(ui, index);
+        //
+        //     ui.add(egui::Label::new("Attenuation constants"));
+        //     self.attenuation_constants.on_egui(ui, index);
+        // });
 
         false
     }
 }
 
-impl Default for PointLight {
-    fn default() -> Self {
-        PointLight {
-            enabled: true,
-            colors: LightColors::no_ambient(vec3(1., 1., 1.), 0.1),
-            attenuation_constants: vec3(1., 1., 1.),
-        }
-    }
-}
-
 impl EguiDrawable for PointLight {
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-        enabled_header!(self, ui, "Point light", index, {
-            ui.add(egui::Label::new("Attenuation constants"));
-            self.attenuation_constants.on_egui(ui, index);
-
-            self.colors.on_egui(ui, index);
-        });
+        // enabled_header!(self, ui, "Point light", index, {
+        //     ui.add(egui::Label::new("Attenuation constants"));
+        //     self.attenuation_constants.on_egui(ui, index);
+        //
+        //     self.colors.on_egui(ui, index);
+        // });
 
         false
     }
@@ -342,9 +322,9 @@ impl EguiDrawable for PointLight {
 
 impl EguiDrawable for DirectionalLight {
     fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-        enabled_header!(self, ui, "Directional light", index, {
-            self.colors.on_egui(ui, index);
-        });
+        // enabled_header!(self, ui, "Directional light", index, {
+        //     self.colors.on_egui(ui, index);
+        // });
 
         false
     }
