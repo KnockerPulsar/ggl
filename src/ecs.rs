@@ -135,7 +135,7 @@ pub trait ComponentVec {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 
     fn push_none(&self);
-    fn draw_egui(&self, ui: &mut Ui, entity_id: usize);
+    fn draw_egui(&self, ui: &mut Ui, entity_id: usize, ecs: &Ecs);
 }
 
 impl<T: 'static + EguiDrawable> ComponentVec for CompVec<T> {
@@ -151,13 +151,13 @@ impl<T: 'static + EguiDrawable> ComponentVec for CompVec<T> {
         self.borrow_mut().push(None);
     }
 
-    fn draw_egui(&self, ui: &mut Ui, entity_id: usize) {
+    fn draw_egui(&self, ui: &mut Ui, entity_id: usize, ecs: &Ecs) {
         let mut vec = self.borrow_mut();
         let Some(comp) = vec.iter_mut().nth(entity_id).unwrap() else {
             return;
         };
 
-        comp.on_egui(ui, entity_id);
+        comp.on_egui(ui, entity_id, ecs);
     }
 }
 

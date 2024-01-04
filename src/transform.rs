@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use crate::{egui_drawable::EguiDrawable, light::float3_slider};
+use crate::{ecs::Ecs, egui_drawable::EguiDrawable, light::float3_slider};
 
 use egui::Ui;
-use glm::{Vec3, Mat4, vec3};
+use glm::{vec3, Mat4, Vec3};
 use nalgebra_glm as glm;
 
 #[derive(Clone, Debug)]
@@ -34,22 +34,20 @@ impl From<Vec3> for Degree3 {
 impl From<Degree3> for Radian3 {
     fn from(val: Degree3) -> Self {
         Radian3(vec3(
-                val.0.x.to_radians(),
-                val.0.y.to_radians(),
-                val.0.z.to_radians(),
+            val.0.x.to_radians(),
+            val.0.y.to_radians(),
+            val.0.z.to_radians(),
         ))
     }
 }
 
 impl EguiDrawable for Degree3 {
-    fn on_egui(&mut self, ui: &mut Ui, _index: usize) -> bool {
-        
+    fn on_egui(&mut self, ui: &mut Ui, _index: usize, ecs: &Ecs) -> bool {
         float3_slider(&mut self.0, ui)
     }
 }
 
 impl Transform {
-
     pub fn new(pos: Vec3, rot: Degree3, name: &str) -> Self {
         Self::with_scale(pos, rot, vec3(1., 1., 1.), name)
     }
@@ -153,8 +151,7 @@ impl Transform {
             .to_degrees();
 
         let rot_y_atany =
-            (rotation_submatrix[(2, 1)].powi(2) 
-             + rotation_submatrix[(2, 2)].powi(2)).sqrt();
+            (rotation_submatrix[(2, 1)].powi(2) + rotation_submatrix[(2, 2)].powi(2)).sqrt();
 
         let rot_y_atanx = -rotation_submatrix[(2, 0)];
 
@@ -173,40 +170,47 @@ impl Transform {
 
         let dist = vec3(pos_diff.x, pos_diff.z, 0.).norm();
         let sign = Vec3::dot(&pos_diff, &vec3(0., 0., 1.)).signum();
-        self.rot.0.x = (180. + f32::atan( sign * pos_diff.y / dist).to_degrees()) / 2.;
+        self.rot.0.x = (180. + f32::atan(sign * pos_diff.y / dist).to_degrees()) / 2.;
 
-        self.update_model_matrix(); 
+        self.update_model_matrix();
     }
 }
 
 impl EguiDrawable for Transform {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize, ecs: &Ecs) -> bool {
+        let header =
+            egui::CollapsingHeader::new(format!("Transform - {}", &self.name)).show(ui, |ui| {
+                ui.columns(2, |columns| {
+                    columns[0].vertical(|ui| {
+                        ui.label("Translation");
+                        ui.label("Rotation");
+                        ui.label("Scale");
+                    });
 
-        let header = egui::CollapsingHeader::new(format!("Transform - {}", &self.name)).show(ui, |ui| {
-            ui.columns(2, |columns| {
-                columns[0].vertical(|ui| {
-                    ui.label("Translation");
-                    ui.label("Rotation");
-                    ui.label("Scale");
-                });
+                    let layout = egui::Layout::default();
+                    columns[1]
+                        .with_layout(layout, |ui| {
+                            ui.vertical(|ui| {
+                                let any_changed = [
+                                    self.pos.on_egui(ui, index, ecs),
+                                    self.rot.on_egui(ui, index, ecs),
+                                    self.scale.on_egui(ui, index, ecs),
+                                ]
+                                .iter()
+                                .any(|changed| *changed);
 
-                let layout = egui::Layout::default();
-                columns[1].with_layout(layout, |ui| {
-                    ui.vertical(|ui| {
-                        let any_changed = [ 
-                            self.pos.on_egui(ui, index),
-                            self.rot.on_egui(ui, index),
-                            self.scale.on_egui(ui, index)
-                        ].iter().any(|changed| *changed);
-
-                        any_changed
-                    }).inner
-                }).inner
-            })
-        });
+                                any_changed
+                            })
+                            .inner
+                        })
+                        .inner
+                })
+            });
 
         let changed = header.body_returned.unwrap_or(false);
-        if changed { self.update_model_matrix(); }
+        if changed {
+            self.update_model_matrix();
+        }
 
         changed
     }

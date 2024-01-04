@@ -86,7 +86,7 @@ fn selected_entity_ui(ui: &mut Ui, ecs: &mut Ecs, selection: usize) -> bool {
 
             ecs.component_vecs
                 .iter()
-                .for_each(|cv| cv.draw_egui(ui, selection));
+                .for_each(|cv| cv.draw_egui(ui, selection, ecs));
 
             ui.add_space(10.);
             ui.separator();
@@ -147,7 +147,7 @@ pub fn entities_panel(
         (selected_entity, add_entity, add_component)
     };
 
-    // ui.checkbox(lights_on, "Global light toggle");
+    ui.checkbox(_lights_on, "Global light toggle");
     (selected_entity, add_entity, add_component)
 }
 

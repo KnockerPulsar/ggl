@@ -3,6 +3,7 @@ extern crate nalgebra_glm as glm;
 
 use std::format;
 
+use crate::ecs::Ecs;
 use crate::egui_drawable::EguiDrawable;
 use crate::shader::ProgramHandle;
 use crate::Transform;
@@ -12,24 +13,30 @@ use nalgebra_glm::*;
 
 #[macro_export]
 macro_rules! enabled_header {
-    ($self: ident, $ui: ident, $header_name: literal, $index: ident , $body: expr) => {
+    ($enabled: expr, $ui: ident, $header_name: literal, $index: ident, $body: expr) => {{
         let id = $ui.make_persistent_id(format!("{} {}", $header_name, $index));
+        let mut changed = false;
 
-        egui::collapsing_header::CollapsingState::load_with_default_open($ui.ctx(), id, true)
-            .show_header($ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(format!("{} {}", $header_name, $index));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
-                        ui.checkbox(&mut $self.enabled, "");
+        changed |=
+            egui::collapsing_header::CollapsingState::load_with_default_open($ui.ctx(), id, true)
+                .show_header($ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("{} {}", $header_name, $index));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
+                            changed |= ui.checkbox(&mut $enabled, "").changed;
+                        });
                     });
-                });
-            })
-            .body(|$ui| {
-                if $self.enabled {
-                    $body
-                }
-            });
-    };
+                })
+                .body(|$ui| {
+                    if $enabled {
+                        $body
+                    }
+                })
+                .0
+                .changed;
+
+        changed
+    }};
 }
 
 pub trait LightInterface {
@@ -207,7 +214,7 @@ impl LightInterface for SpotLight {
 
 impl EguiDrawable for LightColors {
     #[allow(unused_variables)]
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize, ecs: &Ecs) -> bool {
         egui::Grid::new("Light colors")
             .num_columns(3)
             .start_row(0)
@@ -258,14 +265,14 @@ pub fn float3_slider(float3: &mut Vec3, ui: &mut Ui) -> bool {
 }
 
 impl EguiDrawable for Vec3 {
-    fn on_egui(&mut self, ui: &mut Ui, _index: usize) -> bool {
+    fn on_egui(&mut self, ui: &mut Ui, _index: usize, ecs: &Ecs) -> bool {
         float3_slider(self, ui)
     }
 }
 
 impl EguiDrawable for Vec2 {
     #[allow(unused_variables)]
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
+    fn on_egui(&mut self, ui: &mut Ui, index: usize, ecs: &Ecs) -> bool {
         let mut fields_changed = false;
 
         ui.horizontal(|ui| {
@@ -286,45 +293,54 @@ impl EguiDrawable for Vec2 {
     }
 }
 impl EguiDrawable for CommonLightData {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-        false
+    fn on_egui(&mut self, ui: &mut Ui, index: usize, ecs: &Ecs) -> bool {
+        enabled_header! {self.enabled, ui, "Common Light Data", index, {
+            self.colors.on_egui(ui, index, ecs);
+        }}
     }
 }
 
-// TODO: How can we pass the common light data to here?
-// Easiest solution: pass the whole ecs instance here (might not be possible?)
+// TODO: Perhaps the UI for the common light data is enough?
+// I think we should just draw the data specific to each light type
 impl EguiDrawable for SpotLight {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-        // enabled_header!(self, ui, "Spot light", index, {
-        //     ui.add(egui::Label::new("Cuttoff angles"));
-        //     self.cutoff_angles.on_egui(ui, index);
-        //
-        //     ui.add(egui::Label::new("Attenuation constants"));
-        //     self.attenuation_constants.on_egui(ui, index);
-        // });
+    fn on_egui(&mut self, ui: &mut Ui, index: usize, ecs: &Ecs) -> bool {
+        let mut q = ecs.query1::<CommonLightData>();
+        let cld = q.iter_mut().nth(index).unwrap().0.as_mut().unwrap();
 
-        false
+        enabled_header!(cld.enabled, ui, "Spot light", index, {
+            ui.add(egui::Label::new("Cuttoff angles"));
+            self.cutoff_angles.on_egui(ui, index, ecs);
+
+            ui.add(egui::Label::new("Attenuation constants"));
+            self.attenuation_constants.on_egui(ui, index, ecs);
+        })
     }
 }
 
 impl EguiDrawable for PointLight {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-        // enabled_header!(self, ui, "Point light", index, {
-        //     ui.add(egui::Label::new("Attenuation constants"));
-        //     self.attenuation_constants.on_egui(ui, index);
-        //
-        //     self.colors.on_egui(ui, index);
-        // });
+    fn on_egui(&mut self, ui: &mut Ui, index: usize, ecs: &Ecs) -> bool {
+        let mut q = ecs.query1::<CommonLightData>();
+        let cld = q.iter_mut().nth(index).unwrap().0.as_mut().unwrap();
+
+        enabled_header!(cld.enabled, ui, "Point light", index, {
+            ui.add(egui::Label::new("Attenuation constants"));
+            self.attenuation_constants.on_egui(ui, index, ecs);
+
+            cld.on_egui(ui, index, ecs);
+        });
 
         false
     }
 }
 
 impl EguiDrawable for DirectionalLight {
-    fn on_egui(&mut self, ui: &mut Ui, index: usize) -> bool {
-        // enabled_header!(self, ui, "Directional light", index, {
-        //     self.colors.on_egui(ui, index);
-        // });
+    fn on_egui(&mut self, ui: &mut Ui, index: usize, ecs: &Ecs) -> bool {
+        let mut q = ecs.query1::<CommonLightData>();
+        let cld = q.iter_mut().nth(index).unwrap().0.as_mut().unwrap();
+
+        enabled_header!(cld.enabled, ui, "Directional light", index, {
+            cld.on_egui(ui, index, ecs);
+        });
 
         false
     }
