@@ -268,34 +268,6 @@ impl Ecs {
         None
     }
 
-    pub fn do_n_mut<T, U, V>(
-        &self,
-        mut f: impl (FnMut(&mut T, &mut U) -> Option<V>),
-        n: usize,
-    ) -> Vec<Option<V>>
-    where
-        T: 'static,
-        U: 'static,
-    {
-        let (Some(mut t), Some(mut u)) = (self.borrow_comp_vec::<T>(), self.borrow_comp_vec::<U>())
-        else {
-            // use std::any::type_name;
-            // println!("do_all: Component type {:?} or {:?} not found", type_name::<T>(), type_name::<U>());
-            return vec![];
-        };
-
-        let mut tt = t.cast_mut();
-        let mut uu = u.cast_mut();
-
-        tt.iter_mut()
-            .zip(uu.iter_mut())
-            .filter(|(x, y)| x.is_some() && y.is_some())
-            .map(|(x, y)| (x.as_mut().unwrap(), y.as_mut().unwrap()))
-            .take(n)
-            .map(|(x, y)| f(x, y))
-            .collect()
-    }
-
     pub fn do_n<T, U, V>(&self, f: impl (Fn(&T, &U) -> Option<V>), n: usize) -> Vec<Option<V>>
     where
         T: 'static,
@@ -319,45 +291,12 @@ impl Ecs {
             .collect()
     }
 
-    pub fn do_all_mut<T, U, V>(
-        &self,
-        f: impl (FnMut(&mut T, &mut U) -> Option<V>),
-    ) -> Vec<Option<V>>
-    where
-        T: 'static,
-        U: 'static,
-    {
-        self.do_n_mut(f, self.entity_count)
-    }
-
     pub fn do_all<T, U, V>(&self, f: impl (Fn(&T, &U) -> Option<V>)) -> Vec<Option<V>>
     where
         T: 'static,
         U: 'static,
     {
         self.do_n(f, self.entity_count)
-    }
-
-    pub fn do_one<T, U, V>(&self, f: impl (FnMut(&mut T, &mut U) -> Option<V>)) -> Option<V>
-    where
-        T: 'static,
-        U: 'static,
-    {
-        self.do_n_mut(f, 1).pop().unwrap_or(None)
-    }
-
-    pub fn do_entity<T, U>(&self, entity_id: usize, mut f: impl (FnMut(&mut T) -> U)) -> U
-    where
-        T: 'static,
-    {
-        assert!(entity_id < self.entity_count);
-
-        let mut comp_vec = self.borrow_comp_vec::<T>().unwrap();
-        let cv = comp_vec.cast_mut();
-
-        let comp = cv.iter_mut().nth(entity_id).unwrap().as_mut().unwrap();
-
-        f(comp)
     }
 
     pub fn do_all_enumerate<T, U>(&self, f: impl (FnMut((usize, &mut T)) -> Option<U>)) -> Vec<U>

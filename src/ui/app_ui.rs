@@ -15,20 +15,21 @@ pub fn draw_gizmo(ui: &mut Ui, scene: &Scene) {
         return;
     };
 
-    scene
-        .ecs
-        .do_entity(eid, |selected_entity_transform: &mut Transform| {
-            let gizmo = Gizmo::new("My gizmo")
-                .view_matrix(scene.camera.get_view_matrix())
-                .projection_matrix(scene.camera.get_proj_matrix())
-                .model_matrix(selected_entity_transform.get_model_matrix())
-                .mode(scene.gizmo_mode)
-                .orientation(GizmoOrientation::Local);
+    let mut q = scene.ecs.query1::<Transform>();
+    let nth = q.iter_mut().nth(eid).unwrap().0;
 
-            if let Some(response) = gizmo.interact(ui) {
-                selected_entity_transform.set_model(response.transform.into());
-            }
-        });
+    nth.as_mut().map(|selected_entity_transform| {
+        let gizmo = Gizmo::new("My gizmo")
+            .view_matrix(scene.camera.get_view_matrix())
+            .projection_matrix(scene.camera.get_proj_matrix())
+            .model_matrix(selected_entity_transform.get_model_matrix())
+            .mode(scene.gizmo_mode)
+            .orientation(GizmoOrientation::Local);
+
+        if let Some(response) = gizmo.interact(ui) {
+            selected_entity_transform.set_model(response.transform.into());
+        }
+    });
 }
 
 pub fn selected_entity_gizmo(ctx: &Context, current_scene: &mut Scene, input: &InputSystem) {
@@ -77,7 +78,15 @@ fn selected_entity_ui(ui: &mut Ui, ecs: &mut Ecs, selection: usize) -> bool {
     egui::CentralPanel::default()
         .frame(egui::Frame::default().outer_margin(10.0))
         .show_inside(ui, |ui| {
-            let name = ecs.do_entity(selection, |t: &mut Transform| t.get_name().to_string());
+            let name = {
+                let mut q = ecs.query1::<Transform>();
+                let nth = q.iter_mut().nth(selection).unwrap().0;
+
+                nth.as_mut()
+                    .map(|t: &mut Transform| t.get_name().to_string())
+                    .unwrap()
+            };
+
             ui.vertical_centered(|ui| {
                 ui.label(egui::RichText::new(name).heading().strong());
             });
