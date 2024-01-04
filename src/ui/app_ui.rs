@@ -85,8 +85,8 @@ fn selected_entity_ui(ui: &mut Ui, ecs: &mut Ecs, selection: usize) -> bool {
             ui.add_space(10.);
 
             ecs.component_vecs
-                .iter_mut()
-                .for_each(|cv| cv.as_mut().draw_egui(ui, selection));
+                .iter()
+                .for_each(|cv| cv.draw_egui(ui, selection));
 
             ui.add_space(10.);
             ui.separator();

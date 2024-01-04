@@ -7,6 +7,8 @@ use std::{
     borrow::BorrowMut,
     cell::{RefCell, RefMut},
     fmt,
+    marker::PhantomData,
+    rc::Rc,
 };
 
 use crate::{egui_drawable::EguiDrawable, transform::Transform};
@@ -14,19 +16,19 @@ use egui::Ui;
 
 macro_rules! type_vec_mut {
     ($self: expr, $type: ty) => {
-        $self.as_any_mut().downcast_mut::<RefCell<CompVec<$type>>>()
+        $self.as_any_mut().downcast_mut::<CompVec<$type>>()
     };
 }
 macro_rules! type_vec_ref {
     ($self: expr, $type: ty) => {
-        $self.as_any().downcast_ref::<RefCell<CompVec<$type>>>()
+        $self.as_any().downcast_ref::<CompVec<$type>>()
     };
 }
 
 /// returns a reference to the component corresponding to the given entity ID.
 macro_rules! entity_comp {
-    ($comp_vec: ident, $entity_id: expr) => {
-        $comp_vec.get_mut()[$entity_id].as_mut()
+    ($comp_vec: expr, $entity_id: expr) => {
+        $comp_vec[$entity_id].as_mut()
     };
 }
 
@@ -89,20 +91,20 @@ macro_rules! parens {
 macro_rules! query_struct {
     ($n: literal, ($($t: tt),*), ($($i: literal),*), ($($p: ident),*)) => {
         paste! {
-            pub struct [<Query $n>]<'a, $($t),*> {
-                refs: ($(RefMut<'a, CompVec<$t>>),*,),
+            pub struct [<Query $n>]<'a, $($t: 'static),*> {
+                refs: ($(Foo<'a, $t>),*,),
             }
 
             impl<'a, $($t),*> [<Query $n>]<'a, $($t),*> {
                 pub fn iter_mut(&mut self) -> impl Iterator<Item = ($(&mut Option<$t>),*,)> {
-                        zip_mut!($(paste!(self.refs.$i)),*)
+                        zip_mut!($(paste!(self.refs.$i.cast_mut())),*)
                             .map(|parens!( $($p),* )| ($($p),*,))
                 }
             }
 
             impl<'a, $($t),*> [<Query $n>]<'a, $($t),*> {
                 pub fn iter(&self) -> impl Iterator<Item = ($(&Option<$t>),*,)> {
-                        zip!($(paste!(self.refs.$i)),*)
+                        zip!($(paste!(self.refs.$i.cast())),*)
                             .map(|parens!( $($p),* )| ($($p),*,))
                 }
             }
@@ -113,7 +115,7 @@ macro_rules! query_struct {
 macro_rules! query {
     ($n: literal, ($($t: tt),*)) => {
         paste! {
-            pub fn [<query $n>]<$($t),*>(&self) -> [<Query $n>]<'_, $($t),*>
+            pub fn [<query $n>]<$($t),*>(&self) -> [<Query $n>]<$($t),*>
                 where $($t: 'static),*
             {
                 [<Query $n>] {
@@ -126,17 +128,17 @@ macro_rules! query {
     };
 }
 
-type CompVec<T> = Vec<Option<T>>;
+type CompVec<T> = RefCell<Vec<Option<T>>>;
 
 pub trait ComponentVec {
     fn as_any(&self) -> &dyn std::any::Any;
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
-    fn push_none(&mut self);
 
-    fn draw_egui(&mut self, ui: &mut Ui, entity_id: usize);
+    fn push_none(&self);
+    fn draw_egui(&self, ui: &mut Ui, entity_id: usize);
 }
 
-impl<T: 'static + EguiDrawable> ComponentVec for RefCell<CompVec<T>> {
+impl<T: 'static + EguiDrawable> ComponentVec for CompVec<T> {
     fn as_any(&self) -> &dyn std::any::Any {
         self as &dyn std::any::Any
     }
@@ -145,15 +147,13 @@ impl<T: 'static + EguiDrawable> ComponentVec for RefCell<CompVec<T>> {
         self as &mut dyn std::any::Any
     }
 
-    fn push_none(&mut self) {
-        self.get_mut().push(None);
+    fn push_none(&self) {
+        self.borrow_mut().push(None);
     }
 
-    fn draw_egui(&mut self, ui: &mut Ui, entity_id: usize) {
-        let Some(comp_vec) = &mut type_vec_mut!(self, T) else {
-            return;
-        };
-        let Some(comp) = entity_comp!(comp_vec, entity_id) else {
+    fn draw_egui(&self, ui: &mut Ui, entity_id: usize) {
+        let mut vec = self.borrow_mut();
+        let Some(comp) = vec.iter_mut().nth(entity_id).unwrap() else {
             return;
         };
 
@@ -167,6 +167,21 @@ pub struct Ecs {
 
     // For UI
     pub component_to_add: AddableComponent,
+}
+
+struct Foo<'a, T: 'static> {
+    bar: RefMut<'a, Vec<Option<T>>>,
+    phantom: PhantomData<T>,
+}
+
+impl<'a, T: 'static> Foo<'a, T> {
+    pub fn cast(&self) -> &Vec<Option<T>> {
+        return self.bar.as_ref();
+    }
+
+    pub fn cast_mut(&mut self) -> &mut Vec<Option<T>> {
+        return self.bar.as_mut();
+    }
 }
 
 impl Ecs {
@@ -191,41 +206,62 @@ impl Ecs {
         }
     }
 
+    pub fn find_comp_vec<T: 'static>(&self) -> Option<&Box<dyn ComponentVec>> {
+        self.component_vecs
+            .iter()
+            .find(|cv| cv.as_any().is::<CompVec<T>>())
+    }
+
+    pub fn comp_vec_exists<T: 'static>(&self) -> bool {
+        self.find_comp_vec::<T>().is_some()
+    }
+
     pub fn add_comp_to_entity<T>(&mut self, entity: usize, component: T) -> &mut Self
     where
         T: 'static + EguiDrawable + Clone,
     {
-        for comp_vec in self.component_vecs.iter_mut() {
-            let Some(comp_vec) = type_vec_mut!(comp_vec, T) else {
-                continue;
-            };
+        if let Some(cv) = self.find_comp_vec::<T>() {
+            let mut cv = cv
+                .as_any()
+                .downcast_ref::<CompVec<T>>()
+                .unwrap()
+                .borrow_mut();
 
-            if entity_comp!(comp_vec, entity).is_some() {
+            let comp = &cv[entity];
+
+            if comp.is_some() {
                 let type_name = std::any::type_name::<T>();
                 eprintln!(
                     "Attempted to add an duplicate component ({type_name}) onto entity ({entity})"
                 );
-                return self;
+            } else {
+                cv.borrow_mut()[entity] = Some(component);
             }
+        } else {
+            let mut new_comp_vec: Vec<Option<T>> = vec![None; self.entity_count];
+            new_comp_vec.fill(None);
 
-            comp_vec.get_mut()[entity] = Some(component);
-            return self;
+            new_comp_vec[entity] = Some(component);
+
+            self.component_vecs
+                .push(Box::new(RefCell::new(new_comp_vec)));
         }
 
-        let mut new_comp_vec: Vec<Option<T>> = vec![None; self.entity_count];
-        new_comp_vec.fill(None);
-
-        new_comp_vec[entity] = Some(component);
-
-        self.component_vecs
-            .push(Box::new(RefCell::new(new_comp_vec)));
         self
     }
 
-    pub fn borrow_comp_vec<T: 'static>(&self) -> Option<RefMut<CompVec<T>>> {
+    pub fn borrow_comp_vec<T: 'static>(&self) -> Option<Foo<T>> {
         for comp_vec in self.component_vecs.iter() {
-            if let Some(comp_vec) = type_vec_ref!(comp_vec, T) {
-                return Some(comp_vec.borrow_mut());
+            if comp_vec.as_ref().as_any().is::<CompVec<T>>() {
+                return Some(Foo {
+                    bar: comp_vec
+                        .as_ref()
+                        .as_any()
+                        .downcast_ref::<CompVec<T>>()
+                        .unwrap()
+                        .borrow_mut(),
+                    phantom: PhantomData,
+                });
             }
         }
 
@@ -248,8 +284,11 @@ impl Ecs {
             return vec![];
         };
 
-        t.iter_mut()
-            .zip(u.iter_mut())
+        let mut tt = t.cast_mut();
+        let mut uu = u.cast_mut();
+
+        tt.iter_mut()
+            .zip(uu.iter_mut())
             .filter(|(x, y)| x.is_some() && y.is_some())
             .map(|(x, y)| (x.as_mut().unwrap(), y.as_mut().unwrap()))
             .take(n)
@@ -268,8 +307,11 @@ impl Ecs {
             return vec![];
         };
 
-        t.iter()
-            .zip(u.iter())
+        let tt = t.cast();
+        let uu = u.cast();
+
+        tt.iter()
+            .zip(uu.iter())
             .filter(|(x, y)| x.is_some() && y.is_some())
             .map(|(x, y)| (x.as_ref().unwrap(), y.as_ref().unwrap()))
             .take(n)
@@ -311,8 +353,9 @@ impl Ecs {
         assert!(entity_id < self.entity_count);
 
         let mut comp_vec = self.borrow_comp_vec::<T>().unwrap();
+        let cv = comp_vec.cast_mut();
 
-        let comp = comp_vec.borrow_mut()[entity_id].as_mut().unwrap();
+        let comp = cv.iter_mut().nth(entity_id).unwrap().as_mut().unwrap();
 
         f(comp)
     }
@@ -323,6 +366,7 @@ impl Ecs {
     {
         self.borrow_comp_vec::<T>()
             .unwrap()
+            .cast_mut()
             .iter_mut()
             .enumerate()
             .filter_map(|(id, it)| it.as_mut().map(|it| (id, it)))
