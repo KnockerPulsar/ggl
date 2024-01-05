@@ -69,9 +69,7 @@ in vec2 tex_coord;
 out vec4 frag_color;
 
 uniform vec3 u_view_pos;
-uniform Material u_material;
 
-uniform DirectionalLight u_directional_light;
 
 #define MAX_POINT_LIGHTS 16
 uniform int u_num_point_lights;
@@ -80,6 +78,13 @@ uniform PointLight u_point_lights[MAX_POINT_LIGHTS];
 #define MAX_SPOT_LIGHTS 16
 uniform int u_num_spot_lights;
 uniform SpotLight u_spot_lights[MAX_SPOT_LIGHTS];
+
+#define MAX_DIRECTIONAL_LIGHTS 4
+uniform int u_num_directional_lights;
+uniform DirectionalLight u_directional_lights[MAX_DIRECTIONAL_LIGHTS];
+
+// The only actual per-instance data
+uniform Material u_material;
 
 vec3 computeDirectionalLight(DirectionalLight light, vec3 normal, vec3 view_direction);
 vec3 computePointLight(PointLight light, vec3 normal, vec3 frag_pos, vec3 view_direction);
@@ -90,18 +95,22 @@ void main() {
     vec3 norm = normalize(normal);
     vec3 view_direction = normalize(u_view_pos - frag_pos);
 
-    vec3 result = 
-        computeDirectionalLight(u_directional_light, norm, view_direction);
+    vec3 result = vec3(0);
     
-    for (int i = 0; i < MAX_POINT_LIGHTS; i++){
+    for (int i = 0; i < u_num_point_lights; i++){
         result += 
             computePointLight(u_point_lights[i], norm, frag_pos, view_direction);
     }    
     
-    for (int i = 0; i < MAX_SPOT_LIGHTS; i++){
+    for (int i = 0; i < u_num_spot_lights; i++){
         result += 
             computeSpotLight(u_spot_lights[i], norm, frag_pos, view_direction);
     }    
+
+
+    for (int i = 0; i < u_num_directional_lights; i++){
+        result += computeDirectionalLight(u_directional_lights[i], norm, view_direction);
+    }
     
     result += texture(u_material.texture_emissive1, tex_coord).rrr * u_material.emissive_factor;
     frag_color = vec4(result, 1.0);

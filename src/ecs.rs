@@ -7,30 +7,10 @@ use std::{
     borrow::BorrowMut,
     cell::{RefCell, RefMut},
     fmt,
-    marker::PhantomData,
-    rc::Rc,
 };
 
 use crate::{egui_drawable::EguiDrawable, transform::Transform};
 use egui::Ui;
-
-macro_rules! type_vec_mut {
-    ($self: expr, $type: ty) => {
-        $self.as_any_mut().downcast_mut::<CompVec<$type>>()
-    };
-}
-macro_rules! type_vec_ref {
-    ($self: expr, $type: ty) => {
-        $self.as_any().downcast_ref::<CompVec<$type>>()
-    };
-}
-
-/// returns a reference to the component corresponding to the given entity ID.
-macro_rules! entity_comp {
-    ($comp_vec: expr, $entity_id: expr) => {
-        $comp_vec[$entity_id].as_mut()
-    };
-}
 
 macro_rules! count {
     () => (0usize);
@@ -40,6 +20,7 @@ macro_rules! count {
 macro_rules! addable_component_def {
     ($($comp: ident),+) => {
 
+       /// For use in the editor UI.
        #[derive(Debug, PartialEq, Clone, Copy)]
        pub enum AddableComponent {
           $($comp,)+
@@ -50,6 +31,7 @@ macro_rules! addable_component_def {
                fmt::Debug::fmt(self, f)
            }
        }
+
        pub const ADDABLE_COMPONENTS: [AddableComponent; count!($($comp)+)] = [$(AddableComponent::$comp),+];
     };
 }
@@ -57,7 +39,7 @@ macro_rules! addable_component_def {
 addable_component_def!(Transform, PointLight, SpotLight, DirectionalLight);
 
 #[macro_export]
-macro_rules! add_component {
+macro_rules! add_default_component {
     ($ecs: expr, $selected_entity: expr, [$($k:ident),*]) => {
         match $ecs.component_to_add {
             $(
@@ -92,7 +74,7 @@ macro_rules! query_struct {
     ($n: literal, ($($t: tt),*), ($($i: literal),*), ($($p: ident),*)) => {
         paste! {
             pub struct [<Query $n>]<'a, $($t: 'static),*> {
-                refs: ($(Foo<'a, $t>),*,),
+                refs: ($(CompVecRefMut<'a, $t>),*,),
             }
 
             impl<'a, $($t),*> [<Query $n>]<'a, $($t),*> {
@@ -115,19 +97,25 @@ macro_rules! query_struct {
 macro_rules! query {
     ($n: literal, ($($t: tt),*)) => {
         paste! {
-            pub fn [<query $n>]<$($t),*>(&self) -> [<Query $n>]<$($t),*>
+            pub fn [<query $n>]<$($t),*>(&self) -> Option<[<Query$n>]<$($t),*>>
                 where $($t: 'static),*
             {
-                [<Query $n>] {
+                if !($(self.borrow_comp_vec::<$t>().is_some())&&*) {
+                    return None;
+                }
+
+                Some([<Query $n>] {
                     refs: ($(
                         self.borrow_comp_vec::<$t>().unwrap()
                     ),*,)
-                }
+                })
             }
         }
     };
 }
 
+/// RefCell to allow interior mutability (mutate a component vector of `T` while mutate a compnent
+/// vector of `U`).
 type CompVec<T> = RefCell<Vec<Option<T>>>;
 
 pub trait ComponentVec {
@@ -166,15 +154,20 @@ pub struct Ecs {
     pub component_vecs: Vec<Box<dyn ComponentVec>>,
 
     // For UI
+    // TODO: Probably should separate the renderer and editor more.
+    // Will still have to expose a few shared structs (transform, model, etc...) for both the
+    // renderer and editor to use. I think the next step after the separation would be to make them
+    // traits to allow usability with custom type (i.e. a team using their own `Transform` type can
+    // still use the renderer)
     pub component_to_add: AddableComponent,
 }
 
-struct Foo<'a, T: 'static> {
+/// Extends the lifetime of the `Vec<Option<T>>` inside it so it lives long enough for queries.
+pub struct CompVecRefMut<'a, T: 'static> {
     bar: RefMut<'a, Vec<Option<T>>>,
-    phantom: PhantomData<T>,
 }
 
-impl<'a, T: 'static> Foo<'a, T> {
+impl<'a, T: 'static> CompVecRefMut<'a, T> {
     pub fn cast(&self) -> &Vec<Option<T>> {
         return self.bar.as_ref();
     }
@@ -250,67 +243,21 @@ impl Ecs {
         self
     }
 
-    pub fn borrow_comp_vec<T: 'static>(&self) -> Option<Foo<T>> {
+    pub fn borrow_comp_vec<T: 'static>(&self) -> Option<CompVecRefMut<T>> {
         for comp_vec in self.component_vecs.iter() {
             if comp_vec.as_ref().as_any().is::<CompVec<T>>() {
-                return Some(Foo {
+                return Some(CompVecRefMut {
                     bar: comp_vec
                         .as_ref()
                         .as_any()
                         .downcast_ref::<CompVec<T>>()
                         .unwrap()
                         .borrow_mut(),
-                    phantom: PhantomData,
                 });
             }
         }
 
         None
-    }
-
-    pub fn do_n<T, U, V>(&self, f: impl (Fn(&T, &U) -> Option<V>), n: usize) -> Vec<Option<V>>
-    where
-        T: 'static,
-        U: 'static,
-    {
-        let (Some(t), Some(u)) = (self.borrow_comp_vec::<T>(), self.borrow_comp_vec::<U>()) else {
-            // use std::any::type_name;
-            // println!("do_all: Component type {:?} or {:?} not found", type_name::<T>(), type_name::<U>());
-            return vec![];
-        };
-
-        let tt = t.cast();
-        let uu = u.cast();
-
-        tt.iter()
-            .zip(uu.iter())
-            .filter(|(x, y)| x.is_some() && y.is_some())
-            .map(|(x, y)| (x.as_ref().unwrap(), y.as_ref().unwrap()))
-            .take(n)
-            .map(|(x, y)| f(x, y))
-            .collect()
-    }
-
-    pub fn do_all<T, U, V>(&self, f: impl (Fn(&T, &U) -> Option<V>)) -> Vec<Option<V>>
-    where
-        T: 'static,
-        U: 'static,
-    {
-        self.do_n(f, self.entity_count)
-    }
-
-    pub fn do_all_enumerate<T, U>(&self, f: impl (FnMut((usize, &mut T)) -> Option<U>)) -> Vec<U>
-    where
-        T: 'static,
-    {
-        self.borrow_comp_vec::<T>()
-            .unwrap()
-            .cast_mut()
-            .iter_mut()
-            .enumerate()
-            .filter_map(|(id, it)| it.as_mut().map(|it| (id, it)))
-            .flat_map(f)
-            .collect()
     }
 
     pub fn add_empty_entity(&mut self) {

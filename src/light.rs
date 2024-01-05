@@ -304,7 +304,7 @@ impl EguiDrawable for CommonLightData {
 // I think we should just draw the data specific to each light type
 impl EguiDrawable for SpotLight {
     fn on_egui(&mut self, ui: &mut Ui, index: usize, ecs: &Ecs) -> bool {
-        let mut q = ecs.query1::<CommonLightData>();
+        let mut q = ecs.query1::<CommonLightData>().unwrap();
         let cld = q.iter_mut().nth(index).unwrap().0.as_mut().unwrap();
 
         enabled_header!(cld.enabled, ui, "Spot light", index, {
@@ -319,7 +319,7 @@ impl EguiDrawable for SpotLight {
 
 impl EguiDrawable for PointLight {
     fn on_egui(&mut self, ui: &mut Ui, index: usize, ecs: &Ecs) -> bool {
-        let mut q = ecs.query1::<CommonLightData>();
+        let mut q = ecs.query1::<CommonLightData>().unwrap();
         let cld = q.iter_mut().nth(index).unwrap().0.as_mut().unwrap();
 
         enabled_header!(cld.enabled, ui, "Point light", index, {
@@ -335,7 +335,7 @@ impl EguiDrawable for PointLight {
 
 impl EguiDrawable for DirectionalLight {
     fn on_egui(&mut self, ui: &mut Ui, index: usize, ecs: &Ecs) -> bool {
-        let mut q = ecs.query1::<CommonLightData>();
+        let mut q = ecs.query1::<CommonLightData>().unwrap();
         let cld = q.iter_mut().nth(index).unwrap().0.as_mut().unwrap();
 
         enabled_header!(cld.enabled, ui, "Directional light", index, {

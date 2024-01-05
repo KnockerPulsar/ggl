@@ -163,12 +163,17 @@ impl Renderer {
     }
 
     fn collect_render_commands(ecs: &mut Ecs) -> Vec<RenderCommand> {
-        let rcs: Vec<Option<Vec<_>>> =
-            ecs.do_all(|model_handle: &Handle<Model>, transform: &Transform| {
+        let rcs: Vec<Option<Vec<_>>> = ecs
+            .query2::<Handle<Model>, Transform>()
+            .unwrap()
+            .iter()
+            .filter_map(|(h, t)| h.as_ref().zip(t.as_ref()))
+            .map(|(model_handle, transform)| {
                 let model_handle = model_handle.borrow();
                 if !model_handle.enabled {
                     return None;
                 }
+
                 Some(
                     model_handle
                         .mesh_renderers
@@ -176,7 +181,8 @@ impl Renderer {
                         .map(|mr| RenderCommand(transform.clone(), mr.clone()))
                         .collect::<Vec<_>>(),
                 )
-            });
+            })
+            .collect();
 
         rcs.into_iter()
             .filter(|v| v.is_some())
@@ -224,6 +230,7 @@ impl Renderer {
     }
 }
 
+// TODO: Carry references to avoid copies?
 pub struct RenderCommand(Transform, MeshRenderer);
 
 // OpenGL

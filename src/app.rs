@@ -1,28 +1,15 @@
-
-use std::{sync::Arc, env};
+use std::{env, sync::Arc};
 
 use glow::HasContext;
 use glutin::{event::*, event_loop::ControlFlow};
-
 
 use crate::gl::set_gl;
 use crate::loaders::utils::Handle;
 
 use crate::renderer::GlutinWindow;
-use crate::{
-    add_component, 
-    ui::*, 
-    light::*,
-    ecs::AddableComponent, renderer::Renderer
-};
+use crate::{add_default_component, ecs::AddableComponent, light::*, renderer::Renderer, ui::*};
 
-use crate::{
-    loaders::*,
-    gl::get_gl,
-    scene::Scene,
-    input::InputSystem,
-    transform::Transform,
-};
+use crate::{gl::get_gl, input::InputSystem, loaders::*, scene::Scene, transform::Transform};
 
 pub type EventLoop = glutin::event_loop::EventLoop<()>;
 
@@ -36,16 +23,16 @@ enum Panels {
 pub struct App {
     glow: egui_glow::EguiGlow,
     renderer: Renderer,
-    current_scene: Scene, 
+    current_scene: Scene,
 
-    shader_loader : ShaderLoader,
+    shader_loader: ShaderLoader,
     texture_loader: TextureLoader,
-    object_loader : ObjLoader,
+    object_loader: ObjLoader,
     input: InputSystem,
 
     last_frame: std::time::Instant,
     cumulative_time: std::time::Instant,
-    current_panel: Panels
+    current_panel: Panels,
 }
 
 impl App {
@@ -82,10 +69,9 @@ impl App {
     }
 
     pub fn init(
-        window_width: usize, 
+        window_width: usize,
         window_height: usize,
     ) -> (App, glutin::event_loop::EventLoop<()>) {
-
         let cumulative_time = std::time::Instant::now();
         let event_loop: EventLoop = glutin::event_loop::EventLoopBuilder::with_user_event().build();
         let window = Self::init_window(window_width as i32, window_height as i32, &event_loop);
@@ -104,7 +90,6 @@ impl App {
         let mut texture_loader = TextureLoader::new();
         let object_loader = ObjLoader::new(&mut shader_loader, &mut texture_loader);
 
-
         let last_frame = std::time::Instant::now();
         let input = InputSystem::new();
 
@@ -119,12 +104,12 @@ impl App {
 
             shader_loader,
             texture_loader,
-            object_loader,       
+            object_loader,
             input,
 
             last_frame,
             current_panel: Panels::Entities,
-            cumulative_time
+            cumulative_time,
         };
 
         (app, event_loop)
@@ -142,115 +127,117 @@ impl App {
                 .default_width(400.0)
                 .default_height(250.0)
                 .show(egui_ctx, |ui| {
-
-                egui::TopBottomPanel::top("")
-                    .resizable(false)
-                    .default_height(35.0)
-                    .show_inside(ui, |ui| {
-
-                        ui.horizontal(|ui| {
-                            ui.selectable_value(&mut self.current_panel, Panels::Entities, "Entities");
-                            ui.selectable_value(&mut self.current_panel, Panels::Models, "Models");
-                        });
-                    });
-
-                selected_entity_gizmo(egui_ctx, &mut self.current_scene, &self.input);
-
-                match self.current_panel {
-                    Panels::Entities => {
-                        let (selected_entity, add_entity, add_component) = entities_panel(
-                            ui,
-                            &mut self.current_scene,
-                            &mut self.renderer.lights_on
-                        );
-
-                        self.current_scene.selected_entity = selected_entity;
-
-                        if add_entity {
-                            self.current_scene.ecs.add_empty_entity();
-                        }
-
-                        if let Some(selected_entity) = self.current_scene.selected_entity {
-                            if add_component {
-                                add_component!(
-                                    &mut self.current_scene.ecs,
-                                    selected_entity,
-                                    [Transform, PointLight, SpotLight, DirectionalLight]
+                    egui::TopBottomPanel::top("")
+                        .resizable(false)
+                        .default_height(35.0)
+                        .show_inside(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.selectable_value(
+                                    &mut self.current_panel,
+                                    Panels::Entities,
+                                    "Entities",
                                 );
+                                ui.selectable_value(
+                                    &mut self.current_panel,
+                                    Panels::Models,
+                                    "Models",
+                                );
+                            });
+                        });
+
+                    selected_entity_gizmo(egui_ctx, &mut self.current_scene, &self.input);
+
+                    match self.current_panel {
+                        Panels::Entities => {
+                            let (selected_entity, add_entity, add_component) = entities_panel(
+                                ui,
+                                &mut self.current_scene,
+                                &mut self.renderer.lights_on,
+                            );
+
+                            self.current_scene.selected_entity = selected_entity;
+
+                            if add_entity {
+                                self.current_scene.ecs.add_empty_entity();
+                            }
+
+                            if let Some(selected_entity) = self.current_scene.selected_entity {
+                                if add_component {
+                                    add_default_component!(
+                                        &mut self.current_scene.ecs,
+                                        selected_entity,
+                                        [Transform, PointLight, SpotLight, DirectionalLight]
+                                    );
+                                }
                             }
                         }
-                    }, 
-                    Panels::Models => {
-                        let path = models_panel(ui, &mut self.object_loader);
-                        
-                        let Some(path) = path else { return; };
+                        Panels::Models => {
+                            let path = models_panel(ui, &mut self.object_loader);
 
-                        let str_path = path.to_str().unwrap();
-                        let transform = Transform::with_name(str_path);
+                            let Some(path) = path else {
+                                return;
+                            };
 
-                        let model_name = format!("Model {}", self.object_loader.models().len());
-                        let loaded_model = 
-                            self.object_loader.load_model(model_name, str_path, &mut self.texture_loader, &mut self.shader_loader);
+                            let str_path = path.to_str().unwrap();
+                            let transform = Transform::with_name(str_path);
 
-                        match loaded_model {
-                            Ok(model_rc) => { 
-                                self
-                                    .current_scene
-                                    .ecs
-                                    .add_entity()
-                                    .with(transform)
-                                    .with(Handle::clone(&model_rc)); 
-                            },
-                            Err(_) => eprintln!("Failed to load model at \"{str_path}\""),
-                        };
-                    }
-                };
-            });
+                            let model_name = format!("Model {}", self.object_loader.models().len());
+                            let loaded_model = self.object_loader.load_model(
+                                model_name,
+                                str_path,
+                                &mut self.texture_loader,
+                                &mut self.shader_loader,
+                            );
+
+                            match loaded_model {
+                                Ok(model_rc) => {
+                                    self.current_scene
+                                        .ecs
+                                        .add_entity()
+                                        .with(transform)
+                                        .with(Handle::clone(&model_rc));
+                                }
+                                Err(_) => eprintln!("Failed to load model at \"{str_path}\""),
+                            };
+                        }
+                    };
+                });
         });
-
 
         self.glow.paint(self.renderer.window.window());
     }
 
     fn handle_events(
-
         &mut self,
-        event: Event<()>, 
+        event: Event<()>,
         control_flow: &mut glutin::event_loop::ControlFlow,
     ) {
         match event {
             Event::WindowEvent { event, .. } => {
-
                 // Close window
-                if matches!(event, WindowEvent::CloseRequested | WindowEvent::Destroyed) 
-                    || self.input.just_pressed(VirtualKeyCode::Escape) {
-                        *control_flow = glutin::event_loop::ControlFlow::Exit;
+                if matches!(event, WindowEvent::CloseRequested | WindowEvent::Destroyed)
+                    || self.input.just_pressed(VirtualKeyCode::Escape)
+                {
+                    *control_flow = glutin::event_loop::ControlFlow::Exit;
                 }
 
                 // Resize window
                 if let WindowEvent::Resized(physical_size) = &event {
                     self.current_scene.window_size_changed(physical_size);
                     self.renderer.window_resized(physical_size)
-
-                } else if let WindowEvent::ScaleFactorChanged {
-                    new_inner_size,
-                    ..
-                } = &event
-                {
+                } else if let WindowEvent::ScaleFactorChanged { new_inner_size, .. } = &event {
                     self.renderer.window_resized(new_inner_size)
                 }
 
                 self.glow.on_event(&event);
 
                 // Input event
-                if let 
-                    WindowEvent::KeyboardInput { .. } 
-                | WindowEvent::CursorMoved { .. } 
-                | WindowEvent::MouseInput { .. } 
-                = event {
+                if let WindowEvent::KeyboardInput { .. }
+                | WindowEvent::CursorMoved { .. }
+                | WindowEvent::MouseInput { .. } = event
+                {
                     self.input.handle_events(&event);
                 }
-
 
                 self.renderer.window.window().request_redraw(); // TODO(emilk): ask egui if the events warrants a repaint instead
             }
@@ -264,16 +251,15 @@ impl App {
     }
 
     pub fn run(&mut self, event: Event<()>, control_flow: &mut ControlFlow) {
-
         // Platform-dependent event handlers to workaround a winit bug
         // See: https://github.com/rust-windowing/winit/issues/987
         // See: https://github.com/rust-windowing/winit/issues/1619
         if let glutin::event::Event::MainEventsCleared = event {
             if !cfg!(windows) {
-
                 // draw things behind egui here
                 let current_frame = std::time::Instant::now();
-                self.input.update((current_frame - self.last_frame).as_secs_f32());
+                self.input
+                    .update((current_frame - self.last_frame).as_secs_f32());
 
                 self.current_scene.camera.update(&mut self.input);
 
@@ -281,7 +267,7 @@ impl App {
                     &mut self.current_scene.camera,
                     &mut self.current_scene.ecs,
                     &mut self.shader_loader,
-                    (current_frame-self.cumulative_time).as_secs_f32()
+                    (current_frame - self.cumulative_time).as_secs_f32(),
                 );
 
                 self.app_ui();
@@ -294,14 +280,17 @@ impl App {
             }
         }
 
-        self.handle_events(
-            event,
-            control_flow,
-        );
+        self.handle_events(event, control_flow);
     }
 
-    pub fn get_resource_managers(&mut self) -> (&mut TextureLoader, &mut ObjLoader, &mut ShaderLoader) {
-        (&mut self.texture_loader, &mut self.object_loader, &mut self.shader_loader)
+    pub fn get_resource_managers(
+        &mut self,
+    ) -> (&mut TextureLoader, &mut ObjLoader, &mut ShaderLoader) {
+        (
+            &mut self.texture_loader,
+            &mut self.object_loader,
+            &mut self.shader_loader,
+        )
     }
 }
 

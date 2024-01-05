@@ -15,7 +15,7 @@ pub fn draw_gizmo(ui: &mut Ui, scene: &Scene) {
         return;
     };
 
-    let mut q = scene.ecs.query1::<Transform>();
+    let mut q = scene.ecs.query1::<Transform>().unwrap();
     let nth = q.iter_mut().nth(eid).unwrap().0;
 
     nth.as_mut().map(|selected_entity_transform| {
@@ -79,7 +79,7 @@ fn selected_entity_ui(ui: &mut Ui, ecs: &mut Ecs, selection: usize) -> bool {
         .frame(egui::Frame::default().outer_margin(10.0))
         .show_inside(ui, |ui| {
             let name = {
-                let mut q = ecs.query1::<Transform>();
+                let mut q = ecs.query1::<Transform>().unwrap();
                 let nth = q.iter_mut().nth(selection).unwrap().0;
 
                 nth.as_mut()
@@ -120,16 +120,27 @@ fn entity_selection(ui: &mut Ui, ecs: &mut Ecs) -> (Option<usize>, bool) {
         .show_inside(ui, |ui| {
             ui.heading("Entities");
             ui.with_layout(layout, |ui| {
-                let clicked = ecs.do_all_enumerate(|(id, transform): (usize, &mut Transform)| {
-                    ui.button(transform.get_name()).clicked().then_some(id) // Some(id) iff clicked
-                });
+                let mut q = ecs.query1::<Transform>();
+
+                let clicked = q
+                    .unwrap()
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(_, (t,))| t.is_some())
+                    .map(|(i, (t,))| (i, t.as_mut().unwrap()))
+                    .map(|(id, transform)| {
+                        // Some(id) iff clicked
+                        ui.button(transform.get_name()).clicked().then_some(id)
+                    })
+                    .reduce(Option::or)
+                    .unwrap();
 
                 ui.separator();
 
                 let new_entity = ui.button("New Empty Entity").clicked();
 
                 // Shouldn't click more than one button
-                (clicked.first().copied(), new_entity)
+                (clicked, new_entity)
             })
             .inner
         })

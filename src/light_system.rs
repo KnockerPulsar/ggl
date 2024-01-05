@@ -13,13 +13,23 @@ use crate::{
 pub fn light_subsystem<T: LightInterface>(
     lit_shader: &ProgramHandle,
     ecs: &mut Ecs,
-    u_light_array: &str,
+    light_uniform_suffix: &str,
     global_enable: &bool,
 ) where
     T: 'static,
 {
-    let mut enabled_light_index = 0;
-    ecs.query3::<Transform, PointLight, CommonLightData>()
+    let Some(mut q) = ecs.query3::<Transform, T, CommonLightData>() else {
+        eprintln!(
+            "Attempt to query nonexistent compoenent {}",
+            std::any::type_name::<T>()
+        );
+
+        lit_shader.set_int(&format!("u_num_{}", light_uniform_suffix), 0);
+
+        return;
+    };
+
+    let num_enabled_lights = q
         .iter_mut()
         .filter_map(|(x, y, z)| {
             if let (Some(xx), Some(yy), Some(zz)) = (x, y, z) {
@@ -28,25 +38,33 @@ pub fn light_subsystem<T: LightInterface>(
                 None
             }
         })
-        .for_each(|(transform, light, cld)| {
+        .enumerate()
+        .map(|(i, (transform, light, cld))| {
             light.upload_data(
                 &cld,
                 transform,
-                &format!("{}[{}]", u_light_array, enabled_light_index),
+                &format!("u_{}[{}]", light_uniform_suffix, i),
                 lit_shader,
                 global_enable,
             );
-            enabled_light_index += 1;
-        });
+
+            cld.enabled as i32
+        })
+        .sum();
+
+    lit_shader.set_int(
+        &format!("u_num_{}", light_uniform_suffix),
+        num_enabled_lights,
+    );
 }
 
 pub fn light_system(ecs: &mut Ecs, shader_loader: &mut ShaderLoader, r: &mut Renderer) {
     let lit_shader = &shader_loader.get_shader_rc(DEFAULT_LIT_SHADER);
     lit_shader.use_program();
 
-    light_subsystem::<SpotLight>(lit_shader, ecs, "u_spot_lights", &r.lights_on);
-    light_subsystem::<PointLight>(lit_shader, ecs, "u_point_lights", &r.lights_on);
-    light_subsystem::<DirectionalLight>(lit_shader, ecs, "u_directional_ligths", &r.lights_on);
+    light_subsystem::<SpotLight>(lit_shader, ecs, "spot_lights", &r.lights_on);
+    light_subsystem::<PointLight>(lit_shader, ecs, "point_lights", &r.lights_on);
+    light_subsystem::<DirectionalLight>(lit_shader, ecs, "directional_lights", &r.lights_on);
 }
 
 // let rot = transform.get_rot().0;
