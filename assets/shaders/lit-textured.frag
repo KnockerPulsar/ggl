@@ -143,9 +143,9 @@ vec3 computePointLight(PointLight light, vec3 normal, vec3 frag_pos, vec3 view_d
     
     float dist = length(light.position - frag_pos);
     float attenuation = 1.0 / (
-        light.attenuation_constants.z             // Constant anttenuation
+        light.attenuation_constants.x             // Constant anttenuation
         + light.attenuation_constants.y  * dist   // Linear attenuation 
-        + light.attenuation_constants.x  * dist * dist // Quadratic attenuation
+        + light.attenuation_constants.z  * dist * dist // Quadratic attenuation
     );
     
     vec3 ambient = light.ambient * texture(u_material.texture_diffuse1, tex_coord).rgb;
@@ -173,9 +173,9 @@ vec3 computeSpotLight(SpotLight light, vec3 normal, vec3 frag_pos, vec3 view_dir
     
     float dist = length(light.position - frag_pos);
     float attenuation = 1.0 / (
-        light.attenuation_constants.z             // Constant anttenuation
+        light.attenuation_constants.x             // Constant anttenuation
         + light.attenuation_constants.y  * dist   // Linear attenuation 
-        + light.attenuation_constants.x  * dist * dist // Quadratic attenuation
+        + light.attenuation_constants.z  * dist * dist // Quadratic attenuation
     );
     
     vec3 ambient = light.ambient * texture(u_material.texture_diffuse1, tex_coord).rgb;
