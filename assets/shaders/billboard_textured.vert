@@ -13,13 +13,13 @@ out vec2 tex_coord;
 void main() {
     tex_coord = aTexCoords;
 
-    // sx    x   x   tx
-    // x    sy   x   ty
-    // x    x   sz   tz
-    // x    x   x    x
+    // sx    x     x   	x
+    // x     sy    x   	x
+    // x     x     sz  	x
+    // tx    ty    tz  	x
     // Where tx, ty, and tz are the x, y, and z translations repsectively.
     //       sx, sy, and sz are the x, y, and z scales repsectively.
-    vec3 billboard_center = vec3(model[0][3], model[1][3], model[2][3]);
+    vec3 billboard_center = vec3(model[3][0], model[3][1], model[3][2]);
     vec2 scale = vec2(model[0][0], model[1][1]);
 
     gl_Position = projection * view * vec4( billboard_center, 1 );

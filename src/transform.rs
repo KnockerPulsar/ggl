@@ -11,7 +11,10 @@ pub struct Transform {
     pos: Vec3,
     rot: Degree3,
     scale: Vec3,
+
+    // Stored and uploaded in column-major layout,
     model: Mat4,
+
     name: String,
 }
 
@@ -119,7 +122,7 @@ impl Transform {
         let rot_z = glm::Mat4::from_euler_angles(0., 0., rot.z);
         let rotation = rot_z * rot_y * rot_x;
 
-        translation * rotation * glm::scale(&rotation, &scl)
+        translation * rotation * glm::scaling(&scl)
     }
 
     pub fn set_model(&mut self, mat: glm::Mat4) {
