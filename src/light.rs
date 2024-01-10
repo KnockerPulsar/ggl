@@ -325,8 +325,6 @@ impl EguiDrawable for PointLight {
         enabled_header!(cld.enabled, ui, "Point light", index, {
             ui.add(egui::Label::new("Attenuation constants"));
             self.attenuation_constants.on_egui(ui, index, ecs);
-
-            cld.on_egui(ui, index, ecs);
         });
 
         false
@@ -338,9 +336,7 @@ impl EguiDrawable for DirectionalLight {
         let mut q = ecs.query1::<CommonLightData>().unwrap();
         let cld = q.iter_mut().nth(index).unwrap().0.as_mut().unwrap();
 
-        enabled_header!(cld.enabled, ui, "Directional light", index, {
-            cld.on_egui(ui, index, ecs);
-        });
+        enabled_header!(cld.enabled, ui, "Directional light", index, {});
 
         false
     }
