@@ -19,6 +19,7 @@ macro_rules! map {
 pub type UniformMap = HashMap<&'static str, Uniform>;
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub enum Uniform {
     Float(f32),
     Vec2(Vec2),
@@ -89,19 +90,6 @@ impl ProgramHandle {
 
     fn get_uniform_location(&self, name: &str) -> Option<glow::UniformLocation> {
         unsafe { get_gl().get_uniform_location(self.handle, name) }
-    }
-
-    pub fn upload_uniforms(&self, uniforms: &UniformMap, prefix: &str) {
-        uniforms.iter().for_each(|(uniform_name, uniform_value)| {
-            let uniform_name = format!("{prefix}{uniform_name}");
-
-            match uniform_value {
-                Uniform::Float(float) => self.set_float(&uniform_name, *float),
-                Uniform::Vec2(v2) => self.set_vec2(&uniform_name, *v2),
-                Uniform::Vec3(v3) | Uniform::Color(v3) => self.set_vec3(&uniform_name, *v3),
-                Uniform::Mat4(mat) => self.set_mat4(&uniform_name, *mat),
-            };
-        });
     }
 
     pub fn set_int(&self, name: &str, value: i32) -> &Self {
