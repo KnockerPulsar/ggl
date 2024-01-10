@@ -77,9 +77,7 @@ impl ObjLoader {
     ) {
         let cube_path = "assets/obj/cube.obj";
 
-        let cube_model = self
-            .load_obj(DEFAULT_CUBE_NAME, cube_path, texture_loader, shader_loader)
-            .unwrap();
+        let cube_model = self.load_obj(DEFAULT_CUBE_NAME, cube_path).unwrap();
 
         cube_model.borrow_mut().material =
             Some(Material::default_lit(shader_loader, texture_loader));
@@ -143,14 +141,12 @@ impl ObjLoader {
         &mut self,
         name: impl Into<String>,
         path: impl Into<String>,
-        texture_loader: &mut TextureLoader,
-        shader_loader: &mut ShaderLoader,
     ) -> ModelLoadResult<Handle<Model>> {
         let path_string: String = path.into();
         let name: String = name.into();
 
         if !self.models.contains_key(&path_string) {
-            self.load_obj(name.clone(), &path_string, texture_loader, shader_loader)?;
+            self.load_obj(name.clone(), &path_string)?;
         }
 
         let t = self.models.get(&name).unwrap();
@@ -205,8 +201,6 @@ impl ObjLoader {
         &mut self,
         name: impl Into<String>,
         path: impl Into<String>,
-        texture_loader: &mut TextureLoader,
-        shader_loader: &mut ShaderLoader,
     ) -> Result<Handle<Model>, ObjLoadError> {
         let mut objects = Obj::load(path.into())?;
 
