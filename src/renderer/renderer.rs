@@ -13,7 +13,6 @@ use crate::{
     light_system,
     loaders::{utils::Handle, *},
     map,
-    mesh::MeshRenderer,
     model::Model,
     shader::Uniform,
     transform::Transform,
@@ -124,71 +123,54 @@ impl Renderer {
 
         let render_commands = Self::collect_render_commands(ecs);
 
-        let (transparent, opaque): (Vec<_>, Vec<_>) = render_commands
-            .into_iter()
-            .partition(|rc| rc.1.is_transparent());
+        let (transparent, opaque): (Vec<_>, Vec<_>) =
+            render_commands
+                .into_iter()
+                .partition(|RenderCommand(_, model)| {
+                    model.borrow().material.as_ref().unwrap().transparent
+                });
 
         opaque.iter().for_each(|opaque_rc| {
-            let RenderCommand(t, mesh) = opaque_rc;
-            Self::draw_mesh(t, camera, mesh);
+            Self::draw_model_with_uniforms(opaque_rc, camera);
         });
 
         Self::draw_transparent(transparent, &camera);
-
-        // let end = vec3(time.sin() * 10., 1., time.cos() * 10.);
-        // self.draw_line(vec3(0., 1., 0.), end);
     }
 
-    pub fn draw_mesh(transform: &Transform, camera: &Camera, mr: &MeshRenderer) {
-        let lit_uniforms = map! {
-            "projection" => Uniform::Mat4(camera.get_proj_matrix()),
-            "view"       => Uniform::Mat4(camera.get_view_matrix()),
-            "model"      => Uniform::Mat4(transform.get_model_matrix()),
-            "u_view_pos" => Uniform::Vec3(camera.get_pos()),
-            "u_material.shininess" => Uniform::Float(32.0)
-        };
+    pub fn draw_model_with_uniforms(rc: &RenderCommand, camera: &Camera) {
+        let RenderCommand(transform, model) = rc;
 
-        let other_uniforms = map! {
+        // TODO: Need some way to be able to:
+        //  1. Bind the shader/material and set up per-pass uniforms once
+        //  2. Allow the material to carry its own uniforms
+        let uniforms = map! {
             "projection" => Uniform::Mat4(camera.get_proj_matrix()),
             "view"       => Uniform::Mat4(camera.get_view_matrix()),
+            "u_view_pos" => Uniform::Vec3(camera.get_pos()),
             "model"      => Uniform::Mat4(transform.get_model_matrix())
         };
 
-        let uniforms = match &mr.1.material_type {
-            MaterialType::Lit => &lit_uniforms,
-            MaterialType::Billboard | MaterialType::Unlit => &other_uniforms,
-        };
-
-        mr.draw(uniforms);
+        model.borrow().draw(&uniforms);
     }
 
     fn collect_render_commands(ecs: &mut Ecs) -> Vec<RenderCommand> {
-        let rcs: Vec<Option<Vec<_>>> = ecs
-            .query2::<Handle<Model>, Transform>()
+        ecs.query2::<Handle<Model>, Transform>()
             .unwrap()
             .iter()
-            .filter_map(|(h, t)| h.as_ref().zip(t.as_ref()))
+            .filter_map(|(h, t)| Option::zip(h.as_ref(), t.as_ref()))
             .map(|(model_handle, transform)| {
-                let model_handle = model_handle.borrow();
-                if !model_handle.enabled {
+                if !model_handle.borrow().enabled {
                     return None;
                 }
 
-                Some(
-                    model_handle
-                        .mesh_renderers
-                        .iter()
-                        .map(|mr| RenderCommand(transform.clone(), mr.clone()))
-                        .collect::<Vec<_>>(),
-                )
+                Some(RenderCommand(
+                    transform.clone(),
+                    Handle::clone(model_handle),
+                ))
             })
-            .collect();
-
-        rcs.into_iter()
             .filter(|v| v.is_some())
             .map(|v| v.unwrap())
-            .flatten()
-            .collect::<Vec<RenderCommand>>()
+            .collect::<Vec<_>>()
     }
 
     fn draw_transparent(mut transparent: Vec<RenderCommand>, camera: &Camera) {
@@ -200,11 +182,11 @@ impl Renderer {
         });
 
         transparent.iter().for_each(|tr_rc| {
-            let RenderCommand(t, mesh) = tr_rc;
-            Self::draw_mesh(t, camera, mesh);
+            Self::draw_model_with_uniforms(tr_rc, camera);
         });
     }
 
+    #[allow(dead_code)]
     pub fn draw_line(&mut self, start: Vec3, end: Vec3) {
         let gl = get_gl();
 
@@ -221,17 +203,11 @@ impl Renderer {
 
             gl.draw_arrays(glow::LINES, 0, 2);
         };
-        //         unsigned int buffer; // The ID, kind of a pointer for VRAM
-        // glGenBuffers(1, &buffer); // Allocate memory for the triangle
-        // glBindBuffer(GL_ARRAY_BUFFER, buffer); // Set the buffer as the active array
-        // glBufferData(GL_ARRAY_BUFFER, 2 * sizeof(float), line, GL_STATIC_DRAW); // Fill the buffer with data
-        // glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0); // Specify how the buffer is converted to vertices
-        // glEnableVertexAttribArray(0); // Enable the vertex array}
     }
 }
 
 // TODO: Carry references to avoid copies?
-pub struct RenderCommand(Transform, MeshRenderer);
+pub struct RenderCommand(Transform, Handle<Model>);
 
 // OpenGL
 // TODO: Add outlining to objects.

@@ -1,52 +1,11 @@
-use std::{mem::size_of, rc::Rc};
+use std::mem::size_of;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use glow::HasContext;
 use image::EncodableLayout;
 
-use crate::{gl::get_gl, shader::{UniformMap}, renderer::{Material, MaterialType}, loaders::ShaderLoader};
-use std::hash::{Hasher, Hash};
-
-#[derive(Hash)]
-#[derive(Clone)]
-pub struct MeshRenderer(pub Rc<Mesh>, pub Material);
-
-impl MeshRenderer {
-    pub fn new(mesh: Rc<Mesh>, material: Material) -> Self {
-        Self ( mesh, material )
-    }
-
-    pub fn draw(&self, uniforms: &UniformMap) {
-        let MeshRenderer(mesh, material) = self;
-
-        material.shader.use_program();
-        material.upload_uniforms(uniforms, "");
-
-        let prefix = match material.material_type {
-            MaterialType::Lit          => "u_material.",
-            _                          => ""
-        };
-
-        material.upload_textures(prefix);
-
-        unsafe {
-            let gl_rc = get_gl();
-            gl_rc.bind_vertex_array(Some(mesh.vao));
-            gl_rc.draw_elements(
-                glow::TRIANGLES,
-                mesh.ind_data.len() as i32,
-                glow::UNSIGNED_INT,
-                0,
-            );
-        }
-    }
-
-    pub fn set_material(&mut self, mat: Material) {
-        self.1 = mat;
-    }
-
-    pub fn is_transparent(&self) -> bool { self.1.transparent }
-}
+use crate::gl::get_gl;
+use std::hash::{Hash, Hasher};
 
 #[derive(Clone)]
 pub struct Mesh {
@@ -78,10 +37,7 @@ fn to_bytes(vu32: &mut Vec<u32>) -> Vec<u8> {
 }
 
 impl Mesh {
-    pub fn new(
-        vert_data: Vec<f32>,
-        ind_data: Vec<u32>
-    ) -> Self {
+    pub fn new(vert_data: Vec<f32>, ind_data: Vec<u32>) -> Self {
         let gl_rc = get_gl();
         let mut mesh = Mesh {
             vert_data,
@@ -117,6 +73,10 @@ impl Mesh {
 
             PNTVertex::setup_attribs(&self.vao);
         }
+    }
+
+    pub fn vao(&self) -> glow::VertexArray {
+        self.vao
     }
 }
 
@@ -188,4 +148,3 @@ impl VertexAttribs for PVertex {
         }
     }
 }
-

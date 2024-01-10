@@ -3,10 +3,7 @@ use glow::*;
 use nalgebra_glm as glm;
 use std::{collections::HashMap, error::Error, fs};
 
-use crate::{
-    get_gl,
-    texture::{Texture2D, TextureType},
-};
+use crate::get_gl;
 
 #[macro_export]
 macro_rules! map {
@@ -21,7 +18,6 @@ macro_rules! map {
 
 pub type UniformMap = HashMap<&'static str, Uniform>;
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum Uniform {
     Float(f32),
@@ -29,6 +25,18 @@ pub enum Uniform {
     Vec3(Vec3),
     Color(Vec3),
     Mat4(Mat4),
+}
+
+impl Uniform {
+    pub(crate) fn upload(&self, uniform_name: &str, shader: &ProgramHandle) {
+        match self {
+            Uniform::Float(f) => shader.set_float(uniform_name, *f),
+            Uniform::Vec2(v2) => shader.set_vec2(uniform_name, *v2),
+            Uniform::Vec3(v3) => shader.set_vec3(uniform_name, *v3),
+            Uniform::Color(c) => shader.set_vec3(uniform_name, *c),
+            Uniform::Mat4(m) => shader.set_mat4(uniform_name, *m),
+        };
+    }
 }
 
 #[derive(Hash, Debug, Eq, Clone)]
@@ -94,26 +102,6 @@ impl ProgramHandle {
                 Uniform::Mat4(mat) => self.set_mat4(&uniform_name, *mat),
             };
         });
-    }
-
-    // `prefix` is for when you have a texture inside a struct for example.
-    // You'd have to set the uniform `struct_instance.texture_diffuse1` as an example.
-    pub fn upload_textures(&self, textures: &[Texture2D], prefix: &str) {
-        unsafe {
-            get_gl().disable(glow::TEXTURE);
-        }
-        for (i, texture) in textures.iter().enumerate() {
-            texture.activate_and_bind(i as u32);
-
-            let base_name = match texture.tex_type {
-                TextureType::Diffuse => "texture_diffuse",
-                TextureType::Specular => "texture_specular",
-                TextureType::Emissive => "texture_emissive",
-            };
-
-            let full_name = format!("{prefix}{base_name}{}", texture.tex_index);
-            self.set_int(&full_name, i as i32);
-        }
     }
 
     pub fn set_int(&self, name: &str, value: i32) -> &Self {

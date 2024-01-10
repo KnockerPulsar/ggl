@@ -4,17 +4,16 @@ extern crate byteorder;
 extern crate itertools;
 extern crate obj;
 
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use obj::Obj;
 
 use crate::{
     loaders::*,
     map,
-    mesh::{Mesh, MeshRenderer},
+    mesh::Mesh,
     model::{Model, ObjLoadError},
-    renderer::{Material, MaterialType},
-    texture::{Texture2D, TextureType},
+    renderer::Material,
 };
 
 use self::utils::Handle;
@@ -68,7 +67,6 @@ pub const DEFAULT_PLANE_NAME: &str = "default_plane";
 
 pub struct ObjLoader {
     models: HashMap<String, Handle<Model>>,
-    model_meshes: HashMap<String, Vec<Rc<Mesh>>>,
 }
 
 impl ObjLoader {
@@ -82,11 +80,9 @@ impl ObjLoader {
         let cube_model = self
             .load_obj(DEFAULT_CUBE_NAME, cube_path, texture_loader, shader_loader)
             .unwrap();
-        let mat = Material::default_lit(shader_loader, texture_loader);
 
-        for mr in &mut cube_model.borrow_mut().mesh_renderers {
-            mr.set_material(mat.clone());
-        }
+        cube_model.borrow_mut().material =
+            Some(Material::default_lit(shader_loader, texture_loader));
     }
 
     fn load_default_plane(
@@ -121,33 +117,20 @@ impl ObjLoader {
         let indices: Vec<u32> = vec![2, 0, 1, 2, 1, 3];
 
         let mat = Material::default_billboard(shader_loader, texture_loader);
-        let t = self.add_mesh(DEFAULT_PLANE_NAME.into(), Mesh::new(vertices, indices));
+        let mesh = Mesh::new(vertices, indices);
         self.add_model(
             DEFAULT_PLANE_NAME,
-            Model::new(DEFAULT_PLANE_NAME, "", vec![MeshRenderer::new(t, mat)]),
+            Model::new(DEFAULT_PLANE_NAME, "", vec![mesh], Some(mat)),
         );
     }
 
     pub fn new(shader_loader: &mut ShaderLoader, texture_loader: &mut TextureLoader) -> Self {
-        let mut loader = ObjLoader {
-            models: map! {},
-            model_meshes: map! {},
-        };
+        let mut loader = ObjLoader { models: map! {} };
 
         loader.load_default_cube(shader_loader, texture_loader);
         loader.load_default_plane(shader_loader, texture_loader);
 
         loader
-    }
-
-    pub fn add_mesh(&mut self, model_key: String, mesh: Mesh) -> Rc<Mesh> {
-        self.model_meshes
-            .entry(model_key.clone())
-            .or_insert(vec![])
-            .push(Rc::new(mesh));
-
-        let r = self.model_meshes.get(&model_key).unwrap().last().unwrap();
-        Rc::clone(r)
     }
 
     fn add_model(&mut self, model_key: impl Into<String>, model: Model) -> Handle<Model> {
@@ -239,8 +222,9 @@ impl ObjLoader {
 
         let mut model = {
             let dir = String::from(dir.to_str().unwrap());
-            Model::new(dir.clone(), dir, Vec::new())
+            Model::new(dir.clone(), dir, Vec::new(), None)
         };
+
         let num_objects = objects.data.objects.len() as f32;
 
         for (object_index, object) in objects.data.objects.iter().enumerate() {
@@ -251,11 +235,6 @@ impl ObjLoader {
             let mut pnt: Vec<f32> = vec![];
             let mut inds: Vec<u32> = vec![];
             let mut index = 0u32;
-
-            let mut textures: Vec<Texture2D> = vec![];
-            let mut num_diffuse = 1;
-            let mut num_specular = 1;
-            let _num_emissive = 1;
 
             for (_, poly) in obj_group.polys.iter().enumerate() {
                 for vertex in &poly.0 {
@@ -275,49 +254,51 @@ impl ObjLoader {
                 inds.extend(vec![index, (index + 1), (index + 2)]);
                 index += 3;
 
-                if let Some(obj_mat) = &obj_group.material {
-                    match obj_mat {
-                        obj::ObjMaterial::Ref(_) => todo!(),
-                        obj::ObjMaterial::Mtl(material) => {
-                            if let Some(diffuse_map) = &material.map_kd {
-                                let tex_handle =
-                                    texture_loader.load_texture(&dir.join(diffuse_map));
+                // let mut textures: Vec<Texture2D> = vec![];
+                // let mut num_diffuse = 1;
+                // let mut num_specular = 1;
+                // let _num_emissive = 1;
 
-                                let texture = Texture2D::from_native_handle(
-                                    tex_handle,
-                                    TextureType::Diffuse,
-                                    num_diffuse,
-                                );
-
-                                if !textures.contains(&texture) {
-                                    textures.push(texture);
-                                    num_diffuse += 1;
-                                }
-                            }
-
-                            if let Some(spec_map) = &material.map_ks {
-                                let tex_handle = texture_loader.load_texture(&dir.join(spec_map));
-
-                                let texture = Texture2D::from_native_handle(
-                                    tex_handle,
-                                    TextureType::Specular,
-                                    num_specular,
-                                );
-
-                                if !textures.contains(&texture) {
-                                    textures.push(texture);
-                                    num_specular += 1;
-                                }
-                            }
-                        }
-                    }
-                }
+                // if let Some(obj_mat) = &obj_group.material {
+                //     match obj_mat {
+                //         obj::ObjMaterial::Ref(_) => todo!(),
+                //         obj::ObjMaterial::Mtl(material) => {
+                //             if let Some(diffuse_map) = &material.map_kd {
+                //                 let tex_handle =
+                //                     texture_loader.load_texture(&dir.join(diffuse_map));
+                //
+                //                 let texture = Texture2D::from_native_handle(
+                //                     tex_handle,
+                //                     TextureType::Diffuse,
+                //                     num_diffuse,
+                //                 );
+                //
+                //                 if !textures.contains(&texture) {
+                //                     textures.push(texture);
+                //                     num_diffuse += 1;
+                //                 }
+                //             }
+                //
+                //             if let Some(spec_map) = &material.map_ks {
+                //                 let tex_handle = texture_loader.load_texture(&dir.join(spec_map));
+                //
+                //                 let texture = Texture2D::from_native_handle(
+                //                     tex_handle,
+                //                     TextureType::Specular,
+                //                     num_specular,
+                //                 );
+                //
+                //                 if !textures.contains(&texture) {
+                //                     textures.push(texture);
+                //                     num_specular += 1;
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }
             }
 
-            let mat = Material::lit(shader_loader, textures);
-
-            let mesh = self.add_mesh(name.clone(), Mesh::new(pnt, inds));
-            model.add_mesh(MeshRenderer::new(mesh, mat));
+            model.meshes.push(Mesh::new(pnt, inds))
         }
 
         Ok(self.add_model(name, model))

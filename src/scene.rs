@@ -9,9 +9,7 @@ use crate::{
     ecs::Ecs,
     light::*,
     loaders::{utils::Handle, *},
-    model::Model,
-    renderer::Material,
-    texture::{Texture2D, TextureType},
+    renderer::{BillboardUniforms, Material},
     transform::{Degree3, Transform},
 };
 
@@ -72,18 +70,16 @@ impl Scene {
         //     });
         //
 
-        let pl_tex = Texture2D::from_native_handle(
-            texture_loader.point_light_texture(),
-            TextureType::Diffuse,
-            1,
+        let pl_mat = Material::billboard(
+            shader_loader,
+            BillboardUniforms {
+                diffuse: texture_loader.point_light_texture(),
+            },
         );
-        let pl_mat = Material::billboard(shader_loader, pl_tex);
         let pl_name = "Point light billboard";
         let pl_model = object_loader.clone(DEFAULT_PLANE_NAME, pl_name);
 
-        for mr in &mut pl_model.borrow_mut().mesh_renderers {
-            mr.set_material(pl_mat.clone());
-        }
+        pl_model.borrow_mut().material = Some(pl_mat);
 
         let _point0 = ecs
             .add_entity()
@@ -95,10 +91,14 @@ impl Scene {
             ))
             .with(CommonLightData {
                 enabled: true,
-                colors: LightColors::no_ambient(vec3(2., 0., 0.), 0.1),
+                colors: LightColors {
+                    diffuse: vec3(0.65, 0.61, 0.4),
+                    ambient: vec3(0.16, 0.16, 0.04),
+                    specular: vec3(1., 1., 1.),
+                },
             })
             .with(PointLight {
-                attenuation_constants: vec3(0.2, 0.0, 0.5),
+                attenuation_constants: vec3(1.0, 0.09, 0.032),
             })
             .with(pl_model);
 
@@ -153,23 +153,23 @@ impl Scene {
         );
 
         {
-            let default_plane = object_loader.clone_handle(DEFAULT_PLANE_NAME);
-            let _directional = ecs
-                .add_entity()
-                .with(Transform::with_scale(
-                    vec3(0.0, 0.0, 0.0),
-                    Degree3(vec3(0., 0., 0.)),
-                    vec3(0.1, 0.1, 0.1),
-                    "Directional Light",
-                ))
-                .with(CommonLightData {
-                    enabled: true,
-                    colors: LightColors::default()
-                        .ambient(vec3(0.1, 0.04, 0.1))
-                        .diffuse(vec3(0.5, 0.2, 0.5)),
-                })
-                .with(DirectionalLight {})
-                .with::<Handle<Model>>(Handle::clone(&default_plane));
+            // let default_plane = object_loader.clone_handle(DEFAULT_PLANE_NAME);
+            // let _directional = ecs
+            //     .add_entity()
+            //     .with(Transform::with_scale(
+            //         vec3(0.0, 0.0, 0.0),
+            //         Degree3(vec3(0., 0., 0.)),
+            //         vec3(0.1, 0.1, 0.1),
+            //         "Directional Light",
+            //     ))
+            //     .with(CommonLightData {
+            //         enabled: true,
+            //         colors: LightColors::default()
+            //             .ambient(vec3(0.1, 0.04, 0.1))
+            //             .diffuse(vec3(0.5, 0.2, 0.5)),
+            //     })
+            //     .with(DirectionalLight {})
+            //     .with::<Handle<Model>>(Handle::clone(&default_plane));
         }
 
         // let bp_path = "assets/obj/backpack.obj";
