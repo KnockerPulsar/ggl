@@ -153,23 +153,44 @@ impl Scene {
         );
 
         {
-            // let default_plane = object_loader.clone_handle(DEFAULT_PLANE_NAME);
-            // let _directional = ecs
-            //     .add_entity()
-            //     .with(Transform::with_scale(
-            //         vec3(0.0, 0.0, 0.0),
-            //         Degree3(vec3(0., 0., 0.)),
-            //         vec3(0.1, 0.1, 0.1),
-            //         "Directional Light",
-            //     ))
-            //     .with(CommonLightData {
-            //         enabled: true,
-            //         colors: LightColors::default()
-            //             .ambient(vec3(0.1, 0.04, 0.1))
-            //             .diffuse(vec3(0.5, 0.2, 0.5)),
-            //     })
-            //     .with(DirectionalLight {})
-            //     .with::<Handle<Model>>(Handle::clone(&default_plane));
+            let default_plane = object_loader.clone_handle(DEFAULT_PLANE_NAME);
+            let dl_mat = Material::billboard(
+                shader_loader,
+                BillboardUniforms {
+                    diffuse: texture_loader.directional_light_texture(),
+                },
+            );
+
+            default_plane.borrow_mut().material = Some(dl_mat);
+
+            let _directional = ecs
+                .add_entity()
+                .with(Transform::with_scale(
+                    vec3(0.0, 0.0, 0.0),
+                    Degree3(vec3(0., 0., 0.)),
+                    vec3(0.1, 0.1, 0.1),
+                    "Directional Light",
+                ))
+                .with(CommonLightData {
+                    enabled: true,
+                    colors: LightColors::default()
+                        .ambient(vec3(0.1, 0.04, 0.1))
+                        .diffuse(vec3(0.5, 0.2, 0.5)),
+                })
+                .with(DirectionalLight {})
+                .with(default_plane);
+        }
+
+        {
+            let bunny_path = "assets/obj/bunny.obj";
+            let bunny = object_loader.load_model("Bunny", bunny_path).unwrap();
+
+            bunny.borrow_mut().material = Some(Material::default_unlit(shader_loader));
+
+            let _ = ecs
+                .add_entity()
+                .with(Transform::default().set_name("Bunny").clone())
+                .with(Handle::clone(&bunny));
         }
 
         // let bp_path = "assets/obj/backpack.obj";

@@ -45,7 +45,7 @@ impl App {
             unsafe {
                 let window = glutin::ContextBuilder::new()
                     .with_depth_buffer(24)
-                    .with_vsync(true)
+                    // .with_vsync(true)
                     .with_hardware_acceleration(Some(true))
                     .build_windowed(window_builder, event_loop)
                     .unwrap()
@@ -182,12 +182,7 @@ impl App {
                             let transform = Transform::with_name(str_path);
 
                             let model_name = format!("Model {}", self.object_loader.models().len());
-                            let loaded_model = self.object_loader.load_model(
-                                model_name,
-                                str_path,
-                                &mut self.texture_loader,
-                                &mut self.shader_loader,
-                            );
+                            let loaded_model = self.object_loader.load_model(model_name, str_path);
 
                             match loaded_model {
                                 Ok(model_rc) => {

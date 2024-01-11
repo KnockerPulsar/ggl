@@ -50,7 +50,7 @@ impl Model {
                 gl_rc.bind_vertex_array(Some(mesh.vao()));
                 gl_rc.draw_elements(
                     glow::TRIANGLES,
-                    mesh.ind_data.len() as i32,
+                    mesh.indices.len() as i32,
                     glow::UNSIGNED_INT,
                     0,
                 );

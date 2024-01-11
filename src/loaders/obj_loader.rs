@@ -104,18 +104,19 @@ impl ObjLoader {
         //      2            |             3
         // (-0.5, -0.5, 0)   |       (0.5, -0.5, 0)
         //                   |
-        let vertices: Vec<f32> = vec![
-            -0.5, 0.5, 0., // Position
+        let positions = vec![-0.5, 0.5, 0., 0.5, 0.5, 0., -0.5, -0.5, 0., 0.5, -0.5, 0.];
+
+        let normals = vec![
             0., 0., 1., // Normal
-            0., 0., // UVs
-            0.5, 0.5, 0., 0., 0., 1., 1., 0., -0.5, -0.5, 0., 0., 0., 1., 0., 1., 0.5, -0.5, 0.,
-            0., 0., 1., 1., 1.,
+            0., 0., 1., 0., 0., 1., 0., 0., 1.,
         ];
+
+        let texture_coordinates = vec![0., 0., 1., 0., 0., 1., 1., 1.];
 
         let indices: Vec<u32> = vec![2, 0, 1, 2, 1, 3];
 
         let mat = Material::default_billboard(shader_loader, texture_loader);
-        let mesh = Mesh::new(vertices, indices);
+        let mesh = Mesh::new(positions, normals, texture_coordinates, indices);
         self.add_model(
             DEFAULT_PLANE_NAME,
             Model::new(DEFAULT_PLANE_NAME, "", vec![mesh], Some(mat)),
@@ -226,73 +227,34 @@ impl ObjLoader {
 
             let obj_group = &object.groups[0];
 
-            let mut pnt: Vec<f32> = vec![];
+            let mut positions: Vec<f32> = vec![];
+            let mut normals: Vec<f32> = vec![];
+            let mut texture_coordinates: Vec<f32> = vec![];
             let mut inds: Vec<u32> = vec![];
-            let mut index = 0u32;
 
-            for (_, poly) in obj_group.polys.iter().enumerate() {
+            let mut index = 0;
+            for poly in obj_group.polys.iter() {
                 for vertex in &poly.0 {
                     let pos_index = vertex.0;
 
-                    pnt.extend(all_pos[pos_index]);
-
-                    if let Some(norm_index) = vertex.2 {
-                        pnt.extend(all_norm[norm_index]);
-                    }
+                    positions.extend(all_pos[pos_index]);
 
                     if let Some(tex_index) = vertex.1 {
-                        pnt.extend(all_tex[tex_index]);
+                        texture_coordinates.extend(all_tex[tex_index]);
                     }
+
+                    if let Some(norm_index) = vertex.2 {
+                        normals.extend(all_norm[norm_index]);
+                    }
+
+                    inds.push(index);
+                    index += 1;
                 }
-
-                inds.extend(vec![index, (index + 1), (index + 2)]);
-                index += 3;
-
-                // let mut textures: Vec<Texture2D> = vec![];
-                // let mut num_diffuse = 1;
-                // let mut num_specular = 1;
-                // let _num_emissive = 1;
-
-                // if let Some(obj_mat) = &obj_group.material {
-                //     match obj_mat {
-                //         obj::ObjMaterial::Ref(_) => todo!(),
-                //         obj::ObjMaterial::Mtl(material) => {
-                //             if let Some(diffuse_map) = &material.map_kd {
-                //                 let tex_handle =
-                //                     texture_loader.load_texture(&dir.join(diffuse_map));
-                //
-                //                 let texture = Texture2D::from_native_handle(
-                //                     tex_handle,
-                //                     TextureType::Diffuse,
-                //                     num_diffuse,
-                //                 );
-                //
-                //                 if !textures.contains(&texture) {
-                //                     textures.push(texture);
-                //                     num_diffuse += 1;
-                //                 }
-                //             }
-                //
-                //             if let Some(spec_map) = &material.map_ks {
-                //                 let tex_handle = texture_loader.load_texture(&dir.join(spec_map));
-                //
-                //                 let texture = Texture2D::from_native_handle(
-                //                     tex_handle,
-                //                     TextureType::Specular,
-                //                     num_specular,
-                //                 );
-                //
-                //                 if !textures.contains(&texture) {
-                //                     textures.push(texture);
-                //                     num_specular += 1;
-                //                 }
-                //             }
-                //         }
-                //     }
-                // }
             }
 
-            model.meshes.push(Mesh::new(pnt, inds))
+            model
+                .meshes
+                .push(Mesh::new(positions, normals, texture_coordinates, inds))
         }
 
         Ok(self.add_model(name, model))

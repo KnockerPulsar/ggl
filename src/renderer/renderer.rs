@@ -127,7 +127,12 @@ impl Renderer {
             render_commands
                 .into_iter()
                 .partition(|RenderCommand(_, model)| {
-                    model.borrow().material.as_ref().unwrap().transparent
+                    model
+                        .borrow()
+                        .material
+                        .as_ref()
+                        .expect("Model without a material!")
+                        .transparent
                 });
 
         opaque.iter().for_each(|opaque_rc| {
