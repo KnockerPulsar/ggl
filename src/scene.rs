@@ -185,11 +185,17 @@ impl Scene {
             let bunny_path = "assets/obj/bunny.obj";
             let bunny = object_loader.load_model("Bunny", bunny_path).unwrap();
 
-            bunny.borrow_mut().material = Some(Material::default_unlit(shader_loader));
+            bunny.borrow_mut().material =
+                Some(Material::default_lit(shader_loader, texture_loader));
 
             let _ = ecs
                 .add_entity()
-                .with(Transform::default().set_name("Bunny").clone())
+                .with(
+                    Transform::default()
+                        .set_name("Bunny")
+                        .set_scale(vec3(10., 10., 10.))
+                        .clone(),
+                )
                 .with(Handle::clone(&bunny));
         }
 

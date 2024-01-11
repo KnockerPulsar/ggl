@@ -92,6 +92,11 @@ impl Transform {
         self.update_model_matrix()
     }
 
+    pub fn set_scale(&mut self, scale: Vec3) -> &mut Self {
+        self.scale = scale;
+        self.update_model_matrix()
+    }
+
     pub fn set_name(&mut self, n: impl Into<String>) -> &mut Self {
         self.name = n.into();
         self

@@ -5,8 +5,10 @@ extern crate itertools;
 extern crate obj;
 
 use std::collections::HashMap;
+use std::hash::Hash;
 
-use obj::Obj;
+use nalgebra_glm::{cross, make_vec3, normalize, Vec3};
+use obj::{Group, IndexTuple, Obj, SimplePolygon};
 
 use crate::{
     loaders::*,
@@ -227,30 +229,51 @@ impl ObjLoader {
 
             let obj_group = &object.groups[0];
 
-            let mut positions: Vec<f32> = vec![];
-            let mut normals: Vec<f32> = vec![];
-            let mut texture_coordinates: Vec<f32> = vec![];
-            let mut inds: Vec<u32> = vec![];
+            let positions = {
+                let position_indices =
+                    Self::extract_attribute_indices(obj_group, |poly: &IndexTuple| poly.0);
 
-            let mut index = 0;
-            for poly in obj_group.polys.iter() {
-                for vertex in &poly.0 {
-                    let pos_index = vertex.0;
+                position_indices
+                    .iter()
+                    .map(|index| all_pos[*index])
+                    .flatten()
+                    .collect::<Vec<_>>()
+            };
 
-                    positions.extend(all_pos[pos_index]);
+            let texture_coordinates = {
+                let texture_coordinate_indices =
+                    Self::extract_attribute_indices(obj_group, |poly: &IndexTuple| poly.1);
+                let has_texture_coordinates =
+                    texture_coordinate_indices.iter().all(Option::is_some);
 
-                    if let Some(tex_index) = vertex.1 {
-                        texture_coordinates.extend(all_tex[tex_index]);
-                    }
-
-                    if let Some(norm_index) = vertex.2 {
-                        normals.extend(all_norm[norm_index]);
-                    }
-
-                    inds.push(index);
-                    index += 1;
+                if has_texture_coordinates {
+                    texture_coordinate_indices
+                        .iter()
+                        .map(|index| all_tex[index.unwrap()])
+                        .flatten()
+                        .collect::<Vec<f32>>()
+                } else {
+                    vec![]
                 }
-            }
+            };
+
+            let normals = {
+                let normal_indices =
+                    Self::extract_attribute_indices(obj_group, |poly: &IndexTuple| poly.2);
+
+                let has_normals = normal_indices.iter().all(Option::is_some);
+                if has_normals {
+                    normal_indices
+                        .iter()
+                        .map(|index| all_norm[index.unwrap()])
+                        .flatten()
+                        .collect::<Vec<f32>>()
+                } else {
+                    Self::flat_shade(&positions)
+                }
+            };
+
+            let inds = (0u32..positions.len() as u32).collect();
 
             model
                 .meshes
@@ -258,5 +281,122 @@ impl ObjLoader {
         }
 
         Ok(self.add_model(name, model))
+    }
+
+    fn smooth_shade(positions: &[f32]) -> Vec<f32> {
+        // For each polygon (triangle):
+        //  Get the three vertex positions
+        //  Compute v0v1 and v0v2
+        //  Compute the cross product
+        //  normal = normalize(cross_produdct)
+        //  Record that v0, v1, v2 have normal = normal
+        //
+        // For each vertex:
+        //  Compute its average normal from the list of recorded normals
+        //  Set the value of the vertex normal to the average
+
+        #[derive(Clone, Copy)]
+        struct HashableFloat3 {
+            data: [f32; 3],
+        }
+
+        impl PartialEq for HashableFloat3 {
+            fn eq(&self, other: &Self) -> bool {
+                self.data.iter().zip(other.data.iter()).all(|(a, b)| a == b)
+            }
+        }
+
+        impl Eq for HashableFloat3 {}
+
+        impl Hash for HashableFloat3 {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.data
+                    .iter()
+                    .for_each(|x| state.write_u32(unsafe { std::mem::transmute(*x) }))
+            }
+        }
+
+        impl From<&[f32]> for HashableFloat3 {
+            fn from(v: &[f32]) -> Self {
+                HashableFloat3 {
+                    data: v.try_into().unwrap(),
+                }
+            }
+        }
+
+        impl From<Vec3> for HashableFloat3 {
+            fn from(v: Vec3) -> Self {
+                HashableFloat3 {
+                    data: [v.x, v.y, v.z],
+                }
+            }
+        }
+
+        let mut vertex_to_normals: HashMap<HashableFloat3, Vec<Vec3>> = HashMap::new();
+
+        positions.chunks_exact(9).for_each(|verts| {
+            let (v0, v1, v2) = (
+                make_vec3(&verts[0..3]),
+                make_vec3(&verts[3..6]),
+                make_vec3(&verts[6..9]),
+            );
+
+            let v0v1 = v1 - v0;
+            let v0v2 = v2 - v0;
+
+            let n: Vec3 = normalize(&cross(&v0v1, &v0v2));
+
+            vertex_to_normals.entry(v0.into()).or_default().push(n);
+            vertex_to_normals.entry(v1.into()).or_default().push(n);
+            vertex_to_normals.entry(v2.into()).or_default().push(n);
+        });
+
+        let vertex_to_avg_normal = vertex_to_normals
+            .iter()
+            .map(|(v, ns)| (*v, ns.iter().sum::<Vec3>() / ns.len() as f32))
+            .collect::<HashMap<HashableFloat3, Vec3>>();
+
+        positions
+            .chunks_exact(3)
+            .map(|pos| {
+                let hf: HashableFloat3 = pos[0..3].into();
+                let n = vertex_to_avg_normal.get(&hf).unwrap();
+                [n.x, n.y, n.z]
+            })
+            .flatten()
+            .collect::<Vec<_>>()
+    }
+
+    fn flat_shade(positions: &[f32]) -> Vec<f32> {
+        positions
+            .chunks_exact(9)
+            .map(|verts| {
+                let (v0, v1, v2) = (
+                    make_vec3(&verts[0..3]),
+                    make_vec3(&verts[3..6]),
+                    make_vec3(&verts[6..9]),
+                );
+
+                let v0v1 = v1 - v0;
+                let v0v2 = v2 - v0;
+
+                let n: Vec3 = normalize(&cross(&v0v1, &v0v2));
+
+                [n.x, n.y, n.z, n.x, n.y, n.z, n.x, n.y, n.z]
+            })
+            .flatten()
+            .collect::<Vec<f32>>()
+    }
+
+    pub fn extract_attribute_indices<T, F: Fn(&IndexTuple) -> T>(
+        obj_group: &Group,
+        extractor: F,
+    ) -> Vec<T> {
+        obj_group
+            .polys
+            .iter()
+            .map(|poly| poly.0.iter().map(|poly| extractor(poly)))
+            .flatten()
+            .collect::<Vec<_>>()
     }
 }
