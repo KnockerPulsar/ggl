@@ -1,13 +1,16 @@
-use std::sync::Arc;
 use glow::Context;
+use std::sync::Arc;
 
-static mut GL_CONTEXT: Option<Arc<Context>> = None;
+pub type GlContext = Arc<Context>;
+static mut GL_CONTEXT: Option<GlContext> = None;
 
-pub fn get_gl() -> &'static mut Arc<Context> {
+pub fn get_gl() -> &'static mut GlContext {
     unsafe { GL_CONTEXT.as_mut().unwrap_or_else(|| panic!()) }
 }
 
-pub fn set_gl(gl_rc: Arc<Context>) -> &'static mut Arc<Context> {
-    unsafe { GL_CONTEXT = Some(gl_rc); }
+pub fn set_gl(gl_rc: Arc<Context>) -> &'static mut GlContext {
+    unsafe {
+        GL_CONTEXT = Some(gl_rc);
+    }
     get_gl()
 }
