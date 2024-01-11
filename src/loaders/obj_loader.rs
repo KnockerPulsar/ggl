@@ -4,8 +4,9 @@ extern crate byteorder;
 extern crate itertools;
 extern crate obj;
 
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::hash::Hash;
+use std::{collections::HashMap, path::PathBuf};
 
 use nalgebra_glm::{cross, make_vec3, normalize, Vec3};
 use obj::{Group, IndexTuple, Obj, SimplePolygon};
@@ -16,6 +17,7 @@ use crate::{
     mesh::Mesh,
     model::{Model, ObjLoadError},
     renderer::Material,
+    texture::{Texture, TextureType},
 };
 
 use self::utils::Handle;
@@ -79,7 +81,9 @@ impl ObjLoader {
     ) {
         let cube_path = "assets/obj/cube.obj";
 
-        let cube_model = self.load_obj(DEFAULT_CUBE_NAME, cube_path).unwrap();
+        let cube_model = self
+            .load_obj(DEFAULT_CUBE_NAME, cube_path, texture_loader, shader_loader)
+            .unwrap();
 
         cube_model.borrow_mut().material =
             Some(Material::default_lit(shader_loader, texture_loader));
@@ -144,12 +148,14 @@ impl ObjLoader {
         &mut self,
         name: impl Into<String>,
         path: impl Into<String>,
+        texture_loader: &mut TextureLoader,
+        shader_loader: &mut ShaderLoader,
     ) -> ModelLoadResult<Handle<Model>> {
         let path_string: String = path.into();
         let name: String = name.into();
 
         if !self.models.contains_key(&path_string) {
-            self.load_obj(name.clone(), &path_string)?;
+            self.load_obj(name.clone(), &path_string, texture_loader, shader_loader)?;
         }
 
         let t = self.models.get(&name).unwrap();
@@ -204,6 +210,8 @@ impl ObjLoader {
         &mut self,
         name: impl Into<String>,
         path: impl Into<String>,
+        texture_loader: &mut TextureLoader,
+        shader_loader: &mut ShaderLoader,
     ) -> Result<Handle<Model>, ObjLoadError> {
         let mut objects = Obj::load(path.into())?;
 
@@ -224,63 +232,87 @@ impl ObjLoader {
 
         let num_objects = objects.data.objects.len() as f32;
 
+        let mut texture_set = HashSet::new();
+
         for (object_index, object) in objects.data.objects.iter().enumerate() {
             println!("Loading object {i}/{num_objects}", i = object_index);
 
             let obj_group = &object.groups[0];
 
-            let positions = {
-                let position_indices =
-                    Self::extract_attribute_indices(obj_group, |poly: &IndexTuple| poly.0);
+            let (positions, normals, texture_coordinates, indices) =
+                Self::load_geometry(obj_group, &all_pos, &all_tex, &all_norm);
 
-                position_indices
-                    .iter()
-                    .map(|index| all_pos[*index])
-                    .flatten()
-                    .collect::<Vec<_>>()
-            };
-
-            let texture_coordinates = {
-                let texture_coordinate_indices =
-                    Self::extract_attribute_indices(obj_group, |poly: &IndexTuple| poly.1);
-                let has_texture_coordinates =
-                    texture_coordinate_indices.iter().all(Option::is_some);
-
-                if has_texture_coordinates {
-                    texture_coordinate_indices
-                        .iter()
-                        .map(|index| all_tex[index.unwrap()])
-                        .flatten()
-                        .collect::<Vec<f32>>()
-                } else {
-                    vec![]
-                }
-            };
-
-            let normals = {
-                let normal_indices =
-                    Self::extract_attribute_indices(obj_group, |poly: &IndexTuple| poly.2);
-
-                let has_normals = normal_indices.iter().all(Option::is_some);
-                if has_normals {
-                    normal_indices
-                        .iter()
-                        .map(|index| all_norm[index.unwrap()])
-                        .flatten()
-                        .collect::<Vec<f32>>()
-                } else {
-                    Self::flat_shade(&positions)
-                }
-            };
-
-            let inds = (0u32..positions.len() as u32).collect();
+            texture_set.insert(Self::load_materials(obj_group, texture_loader, &dir));
 
             model
                 .meshes
-                .push(Mesh::new(positions, normals, texture_coordinates, inds))
+                .push(Mesh::new(positions, normals, texture_coordinates, indices))
+        }
+
+        assert!(texture_set.len() <= 1);
+
+        if let Some(textures) = texture_set.iter().next() {
+            if !textures.is_empty() {
+                dbg!(&textures);
+                model.material = Some(Material::from_textures(shader_loader, textures));
+            }
         }
 
         Ok(self.add_model(name, model))
+    }
+
+    fn load_geometry(
+        obj_group: &Group,
+        all_pos: &[[f32; 3]],
+        all_tex: &[[f32; 2]],
+        all_norm: &[[f32; 3]],
+    ) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<u32>) {
+        let positions = {
+            let position_indices =
+                Self::extract_attribute_indices(obj_group, |poly: &IndexTuple| poly.0);
+
+            position_indices
+                .iter()
+                .map(|index| all_pos[*index])
+                .flatten()
+                .collect::<Vec<_>>()
+        };
+
+        let texture_coordinates = {
+            let texture_coordinate_indices =
+                Self::extract_attribute_indices(obj_group, |poly: &IndexTuple| poly.1);
+            let has_texture_coordinates = texture_coordinate_indices.iter().all(Option::is_some);
+
+            if has_texture_coordinates {
+                texture_coordinate_indices
+                    .iter()
+                    .map(|index| all_tex[index.unwrap()])
+                    .flatten()
+                    .collect::<Vec<f32>>()
+            } else {
+                vec![]
+            }
+        };
+
+        let normals = {
+            let normal_indices =
+                Self::extract_attribute_indices(obj_group, |poly: &IndexTuple| poly.2);
+
+            let has_normals = normal_indices.iter().all(Option::is_some);
+            if has_normals {
+                normal_indices
+                    .iter()
+                    .map(|index| all_norm[index.unwrap()])
+                    .flatten()
+                    .collect::<Vec<f32>>()
+            } else {
+                Self::flat_shade(&positions)
+            }
+        };
+
+        let indices: Vec<u32> = (0u32..positions.len() as u32).collect();
+
+        (positions, normals, texture_coordinates, indices)
     }
 
     fn smooth_shade(positions: &[f32]) -> Vec<f32> {
@@ -388,7 +420,7 @@ impl ObjLoader {
             .collect::<Vec<f32>>()
     }
 
-    pub fn extract_attribute_indices<T, F: Fn(&IndexTuple) -> T>(
+    fn extract_attribute_indices<T, F: Fn(&IndexTuple) -> T>(
         obj_group: &Group,
         extractor: F,
     ) -> Vec<T> {
@@ -398,5 +430,48 @@ impl ObjLoader {
             .map(|poly| poly.0.iter().map(|poly| extractor(poly)))
             .flatten()
             .collect::<Vec<_>>()
+    }
+
+    fn load_materials(
+        obj_group: &Group,
+        texture_loader: &mut TextureLoader,
+        dir: &PathBuf,
+    ) -> Vec<Texture> {
+        let mut textures: Vec<Texture> = vec![];
+
+        if let Some(obj_mat) = &obj_group.material {
+            match obj_mat {
+                obj::ObjMaterial::Ref(_) => todo!(),
+                obj::ObjMaterial::Mtl(material) => {
+                    if let Some(diffuse_map) = &material.map_kd {
+                        let tex_handle = texture_loader.load_texture(&dir.join(diffuse_map));
+
+                        let texture = Texture {
+                            texture: tex_handle,
+                            kind: TextureType::Diffuse,
+                        };
+
+                        if !textures.contains(&texture) {
+                            textures.push(texture);
+                        }
+                    }
+
+                    if let Some(spec_map) = &material.map_ks {
+                        let tex_handle = texture_loader.load_texture(&dir.join(spec_map));
+
+                        let texture = Texture {
+                            texture: tex_handle,
+                            kind: TextureType::Specular,
+                        };
+
+                        if !textures.contains(&texture) {
+                            textures.push(texture);
+                        }
+                    }
+                }
+            }
+        }
+
+        textures
     }
 }

@@ -59,7 +59,7 @@ pub fn light_subsystem<T: LightInterface>(
 }
 
 pub fn light_system(ecs: &mut Ecs, shader_loader: &mut ShaderLoader, r: &mut Renderer) {
-    let lit_shader = &shader_loader.get_shader_rc(DEFAULT_LIT_SHADER);
+    let lit_shader = &shader_loader.get_shader(DEFAULT_LIT_SHADER);
     lit_shader.use_program();
 
     light_subsystem::<SpotLight>(lit_shader, ecs, "spot_lights", &r.lights_on);

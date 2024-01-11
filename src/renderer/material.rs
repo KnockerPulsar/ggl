@@ -5,8 +5,10 @@ use crate::{
     light::float3_slider,
     loaders::*,
     shader::{ProgramHandle, UniformMap},
-    texture::activate_and_bind,
+    texture::{activate_and_bind, Texture, TextureType},
 };
+
+const MIN_SHININESS: f32 = 2.0f32;
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct LitUniforms {
@@ -115,7 +117,7 @@ impl Material {
         billboard_uniforms: BillboardUniforms,
     ) -> Self {
         Material {
-            shader: shader_loader.get_shader_rc(DEFAULT_BILLBOARD_SHADER),
+            shader: shader_loader.get_shader(DEFAULT_BILLBOARD_SHADER),
             transparent: true,
 
             material_kind: MaterialKind::Billboard(billboard_uniforms),
@@ -123,16 +125,17 @@ impl Material {
     }
 
     pub fn lit(shader_loader: &mut ShaderLoader, mut lit_uniforms: LitUniforms) -> Self {
-        if lit_uniforms.shininess < 2.0 {
+        if lit_uniforms.shininess < MIN_SHININESS {
             eprintln!(
-                "Shininess < 2.0 ({}), will set to 2.0",
-                lit_uniforms.shininess
+                "Shininess < {min_shininess} ({}), will set to {min_shininess}",
+                lit_uniforms.shininess,
+                min_shininess = MIN_SHININESS,
             );
             lit_uniforms.shininess = 2.0;
         }
 
         Material {
-            shader: shader_loader.get_shader_rc(DEFAULT_LIT_SHADER),
+            shader: shader_loader.get_shader(DEFAULT_LIT_SHADER),
             transparent: false,
 
             material_kind: MaterialKind::Lit(lit_uniforms),
@@ -153,7 +156,7 @@ impl Material {
 
     pub fn default_unlit(shader_loader: &mut ShaderLoader) -> Self {
         Material {
-            shader: shader_loader.get_shader_rc(DEFAULT_UNLIT_SHADER),
+            shader: shader_loader.get_shader(DEFAULT_UNLIT_SHADER),
             transparent: false,
 
             material_kind: MaterialKind::Unlit,
@@ -174,6 +177,50 @@ impl Material {
                 shininess: 32.0,
             },
         )
+    }
+
+    pub fn from_textures(shader_loader: &mut ShaderLoader, textures: &Vec<Texture>) -> Self {
+        let diff = textures
+            .iter()
+            .filter(|t| t.kind == TextureType::Diffuse)
+            .map(|t| t.texture)
+            .map(Option::Some)
+            .collect::<Vec<_>>();
+
+        assert!(diff.len() <= 3);
+
+        let spec = textures
+            .iter()
+            .filter(|t| t.kind == TextureType::Specular)
+            .map(|t| t.texture)
+            .map(Option::Some)
+            .collect::<Vec<_>>();
+
+        assert!(spec.len() <= 3);
+
+        let mut diffuse = [None; 3];
+        diffuse
+            .iter_mut()
+            .zip(diff.iter())
+            .for_each(|(dest, source)| *dest = *source);
+
+        let mut specular = [None; 3];
+        specular
+            .iter_mut()
+            .zip(diff.iter())
+            .for_each(|(dest, source)| *dest = *source);
+
+        Material {
+            shader: shader_loader.get_shader(DEFAULT_LIT_SHADER),
+            transparent: false,
+            material_kind: MaterialKind::Lit(LitUniforms {
+                diffuse,
+                specular,
+                emissive: None,
+                emissive_factor: vec3(0., 0., 0.),
+                shininess: MIN_SHININESS,
+            }),
+        }
     }
 
     pub fn upload_uniforms(&self) {

@@ -183,7 +183,9 @@ impl Scene {
 
         {
             let bunny_path = "assets/obj/bunny.obj";
-            let bunny = object_loader.load_model("Bunny", bunny_path).unwrap();
+            let bunny = object_loader
+                .load_model("Bunny", bunny_path, texture_loader, shader_loader)
+                .unwrap();
 
             bunny.borrow_mut().material =
                 Some(Material::default_lit(shader_loader, texture_loader));
@@ -199,13 +201,22 @@ impl Scene {
                 .with(Handle::clone(&bunny));
         }
 
-        // let bp_path = "assets/obj/backpack.obj";
-        // let bp = object_loader.load_model("Backpack", bp_path, texture_loader, shader_loader).unwrap();
-        //
-        // let _backpack = ecs
-        //     .add_entity()
-        //     .with(Transform::default().set_name("Backpack").clone())
-        //     .with::<Handle<Model>>(Handle::clone(&bp));
+        {
+            let bp_path = "assets/obj/backpack.obj";
+            let bp = object_loader
+                .load_model("Backpack", bp_path, texture_loader, shader_loader)
+                .unwrap();
+
+            let _backpack = ecs
+                .add_entity()
+                .with(
+                    Transform::default()
+                        .set_name("Backpack")
+                        .translate(vec3(0., 5., 0.))
+                        .clone(),
+                )
+                .with(Handle::clone(&bp));
+        }
 
         Scene {
             selected_entity: None,

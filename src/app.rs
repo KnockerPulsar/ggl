@@ -182,7 +182,12 @@ impl App {
                             let transform = Transform::with_name(str_path);
 
                             let model_name = format!("Model {}", self.object_loader.models().len());
-                            let loaded_model = self.object_loader.load_model(model_name, str_path);
+                            let loaded_model = self.object_loader.load_model(
+                                model_name,
+                                str_path,
+                                &mut self.texture_loader,
+                                &mut self.shader_loader,
+                            );
 
                             match loaded_model {
                                 Ok(model_rc) => {

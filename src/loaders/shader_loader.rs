@@ -67,7 +67,7 @@ impl ShaderLoader {
         }
     }
 
-    pub fn get_shader_rc(&mut self, program_name: &str) -> ProgramHandle {
+    pub fn get_shader(&mut self, program_name: &str) -> ProgramHandle {
         let shader = if self.shaders.contains_key(program_name) {
             self.shaders.get_mut(program_name)
         } else {
